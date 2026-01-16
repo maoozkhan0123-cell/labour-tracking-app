@@ -1,27 +1,34 @@
 from flask import Flask
-from .models import db, User
 from flask_login import LoginManager
 import os
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-123')
     
-    # Use /tmp for SQLite in Vercel or a persistent DB if defined in env
-    database_uri = os.environ.get('DATABASE_URL')
-    if database_uri and database_uri.startswith("postgres://"):
-        database_uri = database_uri.replace("postgres://", "postgresql://", 1)
-    
-    # Vercel fix: Use /tmp for anything that needs to be written
-    if os.environ.get('VERCEL'):
-        app.instance_path = '/tmp'
-        app.config['SQLALCHEMY_DATABASE_URI'] = database_uri or 'sqlite:////tmp/app_v5.db'
-    else:
-        app.config['SQLALCHEMY_DATABASE_URI'] = database_uri or 'sqlite:///app_v5.db'
-    
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # Initialize Firebase
+    if not firebase_admin._apps:
+        key_path = os.path.join(app.root_path, '..', 'firebase-key.json')
+        if os.path.exists(key_path):
+            cred = credentials.Certificate(key_path)
+        else:
+            import json
+            config = os.environ.get('FIREBASE_CONFIG')
+            if config:
+                cred = credentials.Certificate(json.loads(config))
+                firebase_admin.initialize_app(cred)
+            else:
+                # Local discovery if credentials are set in environment
+                firebase_admin.initialize_app()
+        
+        if not firebase_admin._apps:
+             firebase_admin.initialize_app(cred)
 
-    db.init_app(app)
+    db = firestore.client()
+    
+    from .models import User
     
     login_manager = LoginManager()
     login_manager.login_view = 'main.login'
@@ -29,22 +36,35 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.query.get(int(user_id))
+        return User.get(user_id)
 
     from .routes import main_bp
     app.register_blueprint(main_bp)
 
-    with app.app_context():
-        db.create_all()
-        # Create default users if not exists
-        if not User.query.filter_by(username='admin').first():
-            admin = User(username='admin', password='123', role='manager', name='Main Manager')
-            db.session.add(admin)
-            
-            # Sample Employees
-            emp1 = User(username='emp1', password='123', role='employee', name='John Employee', hourly_rate=25.0)
-            emp2 = User(username='emp2', password='123', role='employee', name='Jane Worker', hourly_rate=30.0)
-            db.session.add_all([emp1, emp2])
-            db.session.commit()
+    # Simplified data initialization for Firestore
+    admin_ref = db.collection('users').document('admin')
+    if not admin_ref.get().exists:
+        admin_ref.set({
+            'username': 'admin',
+            'password': '123',
+            'role': 'manager',
+            'name': 'Main Manager',
+            'hourly_rate': 0.0
+        })
+        
+        db.collection('users').document('emp1').set({
+            'username': 'emp1',
+            'password': '123',
+            'role': 'employee',
+            'name': 'John Employee',
+            'hourly_rate': 25.0
+        })
+        db.collection('users').document('emp2').set({
+            'username': 'emp2',
+            'password': '123',
+            'role': 'employee',
+            'name': 'Jane Worker',
+            'hourly_rate': 30.0
+        })
 
     return app

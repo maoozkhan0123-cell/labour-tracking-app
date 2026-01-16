@@ -7,3 +7,4 @@ instance/
 .vercel/
 node_modules/
 .vscode/
+firebase-key.json

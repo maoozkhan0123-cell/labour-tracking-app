@@ -1,7 +1,9 @@
 from flask import Blueprint, render_template, jsonify, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
-from .models import db, User, Task, Break
+from .models import User, Task
 from datetime import datetime
+from firebase_admin import firestore
+import uuid
 
 main_bp = Blueprint('main', __name__)
 
@@ -18,8 +20,8 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        role = request.form.get('role') # 'manager' or 'employee'
-        user = User.query.filter_by(username=username).first()
+        role = request.form.get('role')
+        user = User.find_by_username(username)
         if user and user.password == password:
             if user.role != role:
                 flash(f'User does not have {role} permissions')
@@ -41,28 +43,35 @@ def logout():
 def manager_dashboard():
     if current_user.role != 'manager':
         return redirect(url_for('main.index'))
-    employees = User.query.filter_by(role='employee').all()
-    tasks = Task.query.all()
     
-    # Calculate Person Summary and Status
+    db = firestore.client()
+    # Get all employees
+    employees_stream = db.collection('users').where('role', '==', 'employee').stream()
+    employees = []
+    for doc in employees_stream:
+        data = doc.to_dict()
+        employees.append(User(id=doc.id, **data))
+        
+    tasks = Task.get_all()
+    
     person_summary = {}
     for emp in employees:
         emp_tasks = [t for t in tasks if t.assigned_to_id == emp.id]
         active_sec = sum(t.active_seconds for t in emp_tasks)
         break_sec = sum(t.break_seconds for t in emp_tasks)
         
-        # Check current status
-        current_task = Task.query.filter_by(assigned_to_id=emp.id, status='active').first()
-        on_break_task = Task.query.filter_by(assigned_to_id=emp.id, status='break').first()
+        # Check current status in Firestore
+        current_status_task = next((t for t in tasks if t.assigned_to_id == emp.id and t.status == 'active'), None)
+        break_status_task = next((t for t in tasks if t.assigned_to_id == emp.id and t.status == 'break'), None)
         
         status = 'Free'
         current_job = ""
-        if current_task:
+        if current_status_task:
             status = 'Working'
-            current_job = current_task.description
-        elif on_break_task:
+            current_job = current_status_task.description
+        elif break_status_task:
             status = 'On Break'
-            current_job = on_break_task.description
+            current_job = break_status_task.description
 
         person_summary[emp.id] = {
             'active_sec': active_sec,
@@ -84,6 +93,7 @@ def assign_task():
     if current_user.role != 'manager':
         return jsonify({'error': 'Unauthorized'}), 403
     data = request.json
+    db = firestore.client()
     
     assignments = data.get('assignments', [])
     description = data.get('description')
@@ -92,22 +102,30 @@ def assign_task():
     if not assignments:
         return jsonify({'error': 'No employees selected'}), 400
 
+    batch = db.batch()
     for assign in assignments:
+        task_id = str(uuid.uuid4())
+        task_ref = db.collection('tasks').document(task_id)
+        
         try:
             rate = float(assign.get('hourly_rate')) if assign.get('hourly_rate') else 0.0
         except:
             rate = 0.0
             
-        new_task = Task(
-            description=description,
-            mo_reference=mo_ref,
-            assigned_to_id=assign['employee_id'],
-            hourly_rate=rate,
-            status='pending'
-        )
-        db.session.add(new_task)
+        task_data = {
+            'description': description,
+            'mo_reference': mo_ref,
+            'assigned_to_id': assign['employee_id'],
+            'hourly_rate': rate,
+            'status': 'pending',
+            'active_seconds': 0,
+            'break_seconds': 0,
+            'total_duration_seconds': 0,
+            'created_at': firestore.SERVER_TIMESTAMP
+        }
+        batch.set(task_ref, task_data)
     
-    db.session.commit()
+    batch.commit()
     return jsonify({'success': True})
 
 # --- Employee Actions ---
@@ -116,62 +134,83 @@ def assign_task():
 def employee_portal():
     if current_user.role != 'employee':
         return redirect(url_for('main.index'))
-    tasks = Task.query.filter_by(assigned_to_id=current_user.id).order_by(Task.id.desc()).all()
+    tasks = Task.get_by_employee(current_user.id)
     return render_template('employee_portal.html', tasks=tasks)
 
-@main_bp.route('/api/task/<int:task_id>/action', methods=['POST'])
+@main_bp.route('/api/task/<task_id>/action', methods=['POST'])
 @login_required
 def task_action(task_id):
     data = request.get_json()
     action = data.get('action') 
-    task = Task.query.get_or_404(task_id)
+    db = firestore.client()
+    task_ref = db.collection('tasks').document(task_id)
+    task_doc = task_ref.get()
+    
+    if not task_doc.exists:
+        return jsonify({'error': 'Task not found'}), 404
+        
+    task_data = task_doc.to_dict()
     now = datetime.utcnow()
     
+    updates = {}
+    
     if action == 'start':
-        task.status = 'active'
-        task.start_time = now
-        task.last_action_time = now
+        updates['status'] = 'active'
+        updates['start_time'] = now
+        updates['last_action_time'] = now
     elif action == 'break':
-        # 1. Close current active period and add to active_seconds
-        if task.status == 'active' and task.last_action_time:
-            diff = now - task.last_action_time
-            task.active_seconds += int(diff.total_seconds())
+        if task_data.get('status') == 'active' and task_data.get('last_action_time'):
+            last_action_time = task_data['last_action_time']
+            if not isinstance(last_action_time, datetime): # In case it's a Firestore timestamp objects
+                 last_action_time = last_action_time.replace(tzinfo=None)
+            diff = now - last_action_time
+            new_active_sec = task_data.get('active_seconds', 0) + int(diff.total_seconds())
+            updates['active_seconds'] = new_active_sec
         
-        # 2. Transition to break
-        task.status = 'break'
-        task.last_action_time = now # Use this as the break start time
-        new_break = Break(task_id=task.id, reason=data.get('reason', 'Break'), start_time=now)
-        db.session.add(new_break)
+        updates['status'] = 'break'
+        updates['last_action_time'] = now
+        # Sub-collection for breaks
+        task_ref.collection('breaks').add({
+            'reason': data.get('reason', 'Break'),
+            'start_time': now
+        })
     elif action == 'resume':
-        # 1. Close current break period and add to break_seconds
-        if task.status == 'break' and task.last_action_time:
-            diff = now - task.last_action_time
-            task.break_seconds += int(diff.total_seconds())
+        if task_data.get('status') == 'break' and task_data.get('last_action_time'):
+            last_action_time = task_data['last_action_time']
+            if not isinstance(last_action_time, datetime):
+                 last_action_time = last_action_time.replace(tzinfo=None)
+            diff = now - last_action_time
+            new_break_sec = task_data.get('break_seconds', 0) + int(diff.total_seconds())
+            updates['break_seconds'] = new_break_sec
             
-            # Also close the Break record in DB
-            last_break = Break.query.filter_by(task_id=task.id).order_by(Break.id.desc()).first()
-            if last_break and not last_break.end_time:
-                last_break.end_time = now
+            # Close the last break
+            breaks_query = task_ref.collection('breaks').order_by('start_time', direction=firestore.Query.DESCENDING).limit(1).stream()
+            for b in breaks_query:
+                b.reference.update({'end_time': now})
 
-        # 2. Transition back to active
-        task.status = 'active'
-        task.last_action_time = now # Use this as the new active period start
+        updates['status'] = 'active'
+        updates['last_action_time'] = now
     elif action == 'complete':
-        # 1. Finalize the current period (either active or break)
-        if task.last_action_time:
-            diff = now - task.last_action_time
-            if task.status == 'active':
-                task.active_seconds += int(diff.total_seconds())
-            elif task.status == 'break':
-                task.break_seconds += int(diff.total_seconds())
+        if task_data.get('last_action_time'):
+            last_action_time = task_data['last_action_time']
+            if not isinstance(last_action_time, datetime):
+                 last_action_time = last_action_time.replace(tzinfo=None)
+            diff = now - last_action_time
+            if task_data.get('status') == 'active':
+                updates['active_seconds'] = task_data.get('active_seconds', 0) + int(diff.total_seconds())
+            elif task_data.get('status') == 'break':
+                updates['break_seconds'] = task_data.get('break_seconds', 0) + int(diff.total_seconds())
         
-        # 2. Transition to completed
-        task.status = 'completed'
-        task.end_time = now
-        total_diff = now - task.start_time
-        task.total_duration_seconds = int(total_diff.total_seconds())
+        updates['status'] = 'completed'
+        updates['end_time'] = now
+        start_time = task_data.get('start_time')
+        if start_time:
+            if not isinstance(start_time, datetime):
+                 start_time = start_time.replace(tzinfo=None)
+            total_diff = now - start_time
+            updates['total_duration_seconds'] = int(total_diff.total_seconds())
 
-    db.session.commit()
+    task_ref.update(updates)
     return jsonify({'success': True})
 
 @main_bp.route('/api/update_employee_rate', methods=['POST'])
@@ -180,33 +219,34 @@ def update_employee_rate():
     if current_user.role != 'manager':
         return jsonify({'error': 'Unauthorized'}), 403
     data = request.json
-    user = User.query.get(data['employee_id'])
-    if user:
-        user.hourly_rate = float(data['hourly_rate'])
-        db.session.commit()
+    db = firestore.client()
+    db.collection('users').document(data['employee_id']).update({
+        'hourly_rate': float(data['hourly_rate'])
+    })
     return jsonify({'success': True})
+
 @main_bp.route('/api/hire_employee', methods=['POST'])
 @login_required
 def hire_employee():
     if current_user.role != 'manager':
         return jsonify({'error': 'Unauthorized'}), 403
     data = request.json
+    db = firestore.client()
     
     username = data.get('username')
     name = data.get('name')
     password = data.get('password')
     hourly_rate = float(data.get('hourly_rate', 0.0))
 
-    if User.query.filter_by(username=username).first():
+    if User.find_by_username(username):
         return jsonify({'error': 'Username already exists'}), 400
 
-    new_user = User(
-        username=username,
-        name=name,
-        password=password,
-        role='employee',
-        hourly_rate=hourly_rate
-    )
-    db.session.add(new_user)
-    db.session.commit()
+    user_id = str(uuid.uuid4())
+    db.collection('users').document(user_id).set({
+        'username': username,
+        'name': name,
+        'password': password,
+        'role': 'employee',
+        'hourly_rate': hourly_rate
+    })
     return jsonify({'success': True})

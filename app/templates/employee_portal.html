@@ -74,14 +74,14 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                 {% if task.status == 'pending' %}
                 <button class="btn btn-primary" style="grid-column: 1 / -1;"
-                    onclick="taskAction({{ task.id }}, 'start')">START WORKFLOW</button>
+                    onclick="taskAction('{{ task.id }}', 'start')">START WORKFLOW</button>
                 {% elif task.status == 'active' %}
-                <button class="btn btn-primary" onclick="taskAction({{ task.id }}, 'complete')">MARK AS
+                <button class="btn btn-primary" onclick="taskAction('{{ task.id }}', 'complete')">MARK AS
                     COMPLETED</button>
-                <button class="btn btn-danger" onclick="showBreakModal({{ task.id }})">TAKE A BREAK</button>
+                <button class="btn btn-danger" onclick="showBreakModal('{{ task.id }}')">TAKE A BREAK</button>
                 {% elif task.status == 'break' %}
                 <button class="btn btn-primary" style="grid-column: 1 / -1;"
-                    onclick="taskAction({{ task.id }}, 'resume')">RESUME WORKFLOW</button>
+                    onclick="taskAction('{{ task.id }}', 'resume')">RESUME WORKFLOW</button>
                 {% elif task.status == 'completed' %}
                 <div
                     style="grid-column: 1 / -1; background: #ecfdf5; color: #065f46; padding: 1rem; border-radius: 12px; font-weight: 700; text-align: center;">
