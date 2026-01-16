@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Portal - Babylon Labor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body style="background: #f8f9fa;">
+    {% macro format_seconds(s) -%}
+    {% set hours = (s // 3600) %}
+    {% set minutes = (s % 3600) // 60 %}
+    {% set seconds = s % 60 %}
+    {{ "%02d:%02d:%02d"|format(hours, minutes, seconds) }}
+    {%- endmacro %}
+
+    <header>
+        <h1>BABYLON PORTAL</h1>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <span style="font-weight: 600;">{{ current_user.name }}</span>
+            <a href="{{ url_for('main.logout') }}"
+                style="color: var(--babylon-gold); text-decoration: none; font-weight: 800; font-size: 0.9rem;">LOGOUT</a>
+        </div>
+    </header>
+
+    <div class="dashboard" style="display: block; max-width: 800px; margin: 0 auto;">
+        <h2 style="font-size: 1.2rem; text-transform: uppercase; margin-bottom: 2rem; color: var(--babylon-navy);">
+            Assigned Workflows</h2>
+
+        {% for task in tasks %}
+        <div class="mo-card {{ task.status }}" style="margin-bottom: 1.5rem; padding: 2rem;" id="task-{{ task.id }}"
+            data-id="{{ task.id }}" data-status="{{ task.status }}" {% if task.status=='active' and
+            task.last_action_time %} data-last-action="{{ task.last_action_time.isoformat() }}"
+            data-base-seconds="{{ task.active_seconds }}" {% elif task.status=='break' and task.last_action_time %}
+            data-last-break-start="{{ task.last_action_time.isoformat() }}"
+            data-base-break-seconds="{{ task.break_seconds }}" {% endif %}>
+            <span class="status-badge">{{ task.status }}</span>
+            <h3 style="font-size: 1.5rem; color: var(--babylon-navy); margin: 0.5rem 0;">{{ task.description }}</h3>
+            <div class="mo-detail" style="font-size: 1rem; margin-bottom: 1.5rem;">Ref: <strong>{{ task.mo_reference
+                    }}</strong> | Rate: ${{ "%.2f"|format(task.hourly_rate) }}/hr</div>
+
+            <div
+                style="display: flex; gap: 2rem; margin-bottom: 2rem; background: #f8f9fa; padding: 1.5rem; border-radius: 12px; border: 1px dashed var(--babylon-border);">
+                <div style="flex: 1;">
+                    <div style="font-size: 0.75rem; font-weight: 800; color: #059669; text-transform: uppercase;">Active
+                        Time</div>
+                    <div class="live-active-timer"
+                        style="font-size: 2.2rem; font-family: monospace; font-weight: 800; color: var(--babylon-navy);">
+                        {{ format_seconds(task.active_seconds) }}
+                    </div>
+                </div>
+                <div style="flex: 1; border-left: 1px solid #ddd; padding-left: 2rem;">
+                    <div style="font-size: 0.75rem; font-weight: 800; color: #dc2626; text-transform: uppercase;">
+                        Non-Active Time</div>
+                    <div class="live-break-timer"
+                        style="font-size: 2.2rem; font-family: monospace; font-weight: 800; color: #7f8c8d;">
+                        {{ format_seconds(task.break_seconds) }}
+                    </div>
+                </div>
+                <div style="flex: 1; border-left: 1px solid #ddd; padding-left: 2rem;">
+                    <div
+                        style="font-size: 0.75rem; font-weight: 800; color: var(--babylon-navy); text-transform: uppercase;">
+                        Estimated Pay</div>
+                    <div class="live-earned-amount" data-rate="{{ task.hourly_rate }}"
+                        style="font-size: 2.2rem; font-family: 'Poppins'; font-weight: 800; color: var(--babylon-gold);">
+                        ${{ "%.2f"|format(task.amount_earned) }}
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                {% if task.status == 'pending' %}
+                <button class="btn btn-primary" style="grid-column: 1 / -1;"
+                    onclick="taskAction({{ task.id }}, 'start')">START WORKFLOW</button>
+                {% elif task.status == 'active' %}
+                <button class="btn btn-primary" onclick="taskAction({{ task.id }}, 'complete')">MARK AS
+                    COMPLETED</button>
+                <button class="btn btn-danger" onclick="showBreakModal({{ task.id }})">TAKE A BREAK</button>
+                {% elif task.status == 'break' %}
+                <button class="btn btn-primary" style="grid-column: 1 / -1;"
+                    onclick="taskAction({{ task.id }}, 'resume')">RESUME WORKFLOW</button>
+                {% elif task.status == 'completed' %}
+                <div
+                    style="grid-column: 1 / -1; background: #ecfdf5; color: #065f46; padding: 1rem; border-radius: 12px; font-weight: 700; text-align: center;">
+                    ✓ WORKFLOW FINALIZED
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Break Reason Modal -->
+    <div class="overlay" id="break-overlay">
+        <div class="timer-modal glass-panel">
+            <h2 style="color: var(--babylon-navy); font-size: 1.2rem; text-transform: uppercase;">Stop Reason</h2>
+            <div class="form-group" style="text-align: left;">
+                <label>Why are you stopping the workflow?</label>
+                <input type="text" id="break-reason" placeholder="e.g. Machine Maintenance, Shift End..."
+                    style="width: 100%;">
+            </div>
+            <button class="btn btn-primary" id="confirm-break-btn">SUBMIT & STOP</button>
+            <button class="btn btn-danger" style="margin-top: 1rem;" onclick="hideBreakModal()">CANCEL</button>
+        </div>
+    </div>
+
+    <script>
+        function format_hhmmss(s) {
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            return [h, m, sec].map(v => v.toString().padStart(2, '0')).join(':');
+        }
+
+        function updateLiveTimers() {
+            // Update Active Timers
+            document.querySelectorAll('.mo-card[data-status="active"]').forEach(card => {
+                const lastAction = new Date(card.dataset.lastAction + 'Z');
+                const baseSeconds = parseInt(card.dataset.baseSeconds || 0);
+                const elapsed = Math.floor((new Date() - lastAction) / 1000);
+                const totalActive = baseSeconds + elapsed;
+
+                const activeDisplay = card.querySelector('.live-active-timer');
+                if (activeDisplay) activeDisplay.innerText = format_hhmmss(totalActive);
+
+                // Update Earned Amount Live
+                const earnedDisplay = card.querySelector('.live-earned-amount');
+                if (earnedDisplay) {
+                    const rate = parseFloat(earnedDisplay.dataset.rate);
+                    const currentEarned = (totalActive / 3600) * rate;
+                    earnedDisplay.innerText = '$' + currentEarned.toFixed(2);
+                }
+            });
+
+            // Update Break Timers (Non-Active)
+            document.querySelectorAll('.mo-card[data-status="break"]').forEach(card => {
+                const breakStart = new Date(card.dataset.lastBreakStart + 'Z');
+                const baseBreakSec = parseInt(card.dataset.baseBreakSeconds || 0);
+                const elapsed = Math.floor((new Date() - breakStart) / 1000);
+                const breakDisplay = card.querySelector('.live-break-timer');
+                if (breakDisplay) breakDisplay.innerText = format_hhmmss(baseBreakSec + elapsed);
+            });
+        }
+
+        setInterval(updateLiveTimers, 1000);
+
+        async function taskAction(taskId, action, reason = '') {
+            const res = await fetch(`/api/task/${taskId}/action`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action, reason })
+            });
+            if (res.ok) {
+                location.reload();
+            } else {
+                alert("Failed to update process. Please try again.");
+            }
+        }
+
+        let activeBreakTaskId = null;
+        function showBreakModal(taskId) {
+            activeBreakTaskId = taskId;
+            document.getElementById('break-overlay').classList.add('active');
+        }
+
+        function hideBreakModal() {
+            document.getElementById('break-overlay').classList.remove('active');
+        }
+
+        document.getElementById('confirm-break-btn').onclick = () => {
+            const reason = document.getElementById('break-reason').value;
+            if (!reason) return alert("Please provide a reason");
+            taskAction(activeBreakTaskId, 'break', reason);
+        };
+    </script>
+</body>
+
+</html>

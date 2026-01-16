@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Odoo Labor Tracker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <header class="glass">
+        <h1>Manufacturing Control</h1>
+        <div id="user-pill" style="color: #94a3b8; font-size: 0.9rem;">No Active Task</div>
+    </header>
+
+    <div class="dashboard" id="mo-dashboard">
+        <!-- MO Cards will be injected here -->
+        <div style="grid-column: 1/-1; text-align: center; color: #64748b; margin-top: 50px;">
+            Loading Active Orders...
+        </div>
+    </div>
+
+    <!-- Timer Modal -->
+    <div class="overlay" id="timer-overlay">
+        <div class="timer-modal glass-panel">
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+
+            <h2 id="modal-mo-title">MO/2024/XXX</h2>
+            <p id="modal-product" style="color: #94a3b8; margin-bottom: 2rem;">Product Name</p>
+
+            <!-- Configuration Step -->
+            <div id="setup-step">
+                <div class="form-group">
+                    <label>Employee</label>
+                    <select id="employee-select">
+                        <option value="">Select Laborer...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Task Description</label>
+                    <input type="text" id="task-desc" placeholder="e.g. Sterilization, Packing...">
+                    <div style="margin-top:0.5rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                        <!-- Quick Tags -->
+                        <span class="tag" onclick="fillTask('Sterilization')">Sterilization</span>
+                        <span class="tag" onclick="fillTask('Mixing')">Mixing</span>
+                        <span class="tag" onclick="fillTask('Filling')">Filling</span>
+                        <span class="tag" onclick="fillTask('Packaging')">Packaging</span>
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="startTimer()">Start Task</button>
+            </div>
+
+            <!-- Active Timer Step -->
+            <div id="active-step" class="hidden timer-active">
+                <div style="color: #94a3b8;">Current Task</div>
+                <div class="timer-display" id="timer">00:00:00</div>
+                <div id="active-info" style="margin-bottom: 2rem; color: #e2e8f0;">
+                    --
+                </div>
+                <button class="btn btn-danger" onclick="stopTimer()">Complete & Sync</button>
+            </div>
+
+        </div>
+    </div>
+
+    <style>
+        .tag {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+
+        .tag:hover {
+            border-color: #60a5fa;
+            color: #60a5fa;
+        }
+    </style>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+
+</html>
