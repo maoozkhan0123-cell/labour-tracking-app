@@ -12,7 +12,13 @@ def create_app():
     if database_uri and database_uri.startswith("postgres://"):
         database_uri = database_uri.replace("postgres://", "postgresql://", 1)
     
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_uri or 'sqlite:///app_v5.db'
+    # Vercel fix: Use /tmp for anything that needs to be written
+    if os.environ.get('VERCEL'):
+        app.instance_path = '/tmp'
+        app.config['SQLALCHEMY_DATABASE_URI'] = database_uri or 'sqlite:////tmp/app_v5.db'
+    else:
+        app.config['SQLALCHEMY_DATABASE_URI'] = database_uri or 'sqlite:///app_v5.db'
+    
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     db.init_app(app)
