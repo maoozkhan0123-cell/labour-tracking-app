@@ -95,9 +95,12 @@ def manager_dashboard():
 @main_bp.route('/api/get_odoo_mos')
 @login_required
 def get_odoo_mos():
-    search = request.args.get('search')
-    mos = odoo.get_active_mo_list(search_query=search)
-    return jsonify(mos)
+    try:
+        search = request.args.get('search')
+        mos = odoo.get_active_mo_list(search_query=search)
+        return jsonify(mos)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 @main_bp.route('/api/task/<task_id>/cancel', methods=['POST'])
 @login_required

@@ -450,16 +450,16 @@
 
             try {
                 const res = await fetch(`/api/get_odoo_mos?search=${query}`);
-                const mos = await res.json();
+                const data = await res.json();
 
-                if (mos.length === 0) {
-                    alert("No active MOs found in Odoo.");
+                if (data.error) {
+                    alert("Odoo Error: " + data.error);
+                } else if (data.length === 0) {
+                    alert("No matching MOs found. (Search is broad, checking for Confirmed/Planned/Progress/To Close)");
                 } else {
-                    // Simple selection logic: Pick the first one or show a list
-                    // For now, let's just populate the first result to the input
-                    const firstMO = mos[0];
+                    const firstMO = data[0];
                     document.getElementById('mo-ref').value = firstMO.name;
-                    alert(`Found: ${firstMO.name} - ${firstMO.product_id[1]}`);
+                    alert(`Selected: ${firstMO.name} (${firstMO.state})\nProduct: ${firstMO.product_id[1]}`);
                 }
             } catch (e) {
                 alert("Could not connect to Odoo API. Check credentials.");

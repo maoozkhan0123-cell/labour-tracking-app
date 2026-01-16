@@ -22,19 +22,24 @@ class OdooClient:
 
     def get_active_mo_list(self, limit=10, search_query=None):
         if not self._connect():
-            return []
+            raise Exception("Odoo Login Failed: Check URL, DB, Username, and Password environment variables.")
         
         try:
             models = xmlrpc.client.ServerProxy(f'{self.url}/xmlrpc/2/object')
-            # Broader search: include planned and draft if confirmed/progress isn't enough
-            domain = [('state', 'in', ['confirmed', 'progress', 'planned', 'to_close'])]
-            if search_query:
+            
+            # Use a VERY broad state list for debugging
+            states = ['draft', 'confirmed', 'planned', 'progress', 'to_close', 'done']
+            domain = [('state', 'in', states)]
+            
+            if search_query and search_query.strip():
                 domain.append('|')
                 domain.append(('name', 'ilike', search_query))
                 domain.append(('product_id.name', 'ilike', search_query))
+            
+            print(f"Searching Odoo MOs with domain: {domain}")
                 
             mo_ids = models.execute_kw(self.db, self.uid, self.password,
-                'mrp.production', 'search', [domain], {'limit': limit, 'order': 'date_planned_start desc'})
+                'mrp.production', 'search', [domain], {'limit': limit, 'order': 'id desc'})
             
             if not mo_ids:
                 return []
@@ -44,8 +49,8 @@ class OdooClient:
             
             return mos
         except Exception as e:
-            print(f"Odoo Data Fetch Error: {e}")
-            return []
+            print(f"Odoo Data Fetch Error: {str(e)}")
+            raise Exception(f"Failed to fetch from mrp.production: {str(e)}")
 
 # Placeholder instance
 odoo = OdooClient()
