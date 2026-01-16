@@ -26,66 +26,88 @@
         </div>
     </header>
 
-    <div class="dashboard" style="display: block; max-width: 800px; margin: 0 auto;">
-        <h2 style="font-size: 1.2rem; text-transform: uppercase; margin-bottom: 2rem; color: var(--babylon-navy);">
-            Assigned Workflows</h2>
+    <div class="dashboard" style="display: block; max-width: 850px; margin: 0 auto; padding: 2rem 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h2
+                style="font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; color: var(--babylon-navy); margin: 0; border-left: 4px solid var(--babylon-gold); padding-left: 15px;">
+                Assigned Workflows</h2>
+            <div style="font-size: 0.8rem; color: #7f8c8d; font-weight: 600;">{{ tasks|length }} ASSIGNMENTS</div>
+        </div>
 
-        {% for task in tasks %}
-        <div class="mo-card {{ task.status }}" style="margin-bottom: 1.5rem; padding: 2rem;" id="task-{{ task.id }}"
-            data-id="{{ task.id }}" data-status="{{ task.status }}" {% if task.status=='active' and
-            task.last_action_time %} data-last-action="{{ task.last_action_time.isoformat() }}"
+        {% for task in tasks if task.status != 'cancelled' %}
+        <div class="mo-card {{ task.status }}"
+            style="margin-bottom: 2rem; padding: 0; border-radius: 20px; overflow: hidden; border: 1px solid var(--babylon-border); background: white; transition: all 0.3s ease; box-shadow: 0 10px 30px rgba(0,0,0,0.03);"
+            id="task-{{ task.id }}" data-id="{{ task.id }}" data-status="{{ task.status }}" {% if task.status=='active'
+            and task.last_action_time %} data-last-action="{{ task.last_action_time.isoformat() }}"
             data-base-seconds="{{ task.active_seconds }}" {% elif task.status=='break' and task.last_action_time %}
             data-last-break-start="{{ task.last_action_time.isoformat() }}"
             data-base-break-seconds="{{ task.break_seconds }}" {% endif %}>
-            <span class="status-badge">{{ task.status }}</span>
-            <h3 style="font-size: 1.5rem; color: var(--babylon-navy); margin: 0.5rem 0;">{{ task.description }}</h3>
-            <div class="mo-detail" style="font-size: 1rem; margin-bottom: 1.5rem;">Ref: <strong>{{ task.mo_reference
-                    }}</strong> | Rate: ${{ "%.2f"|format(task.hourly_rate) }}/hr</div>
 
             <div
-                style="display: flex; gap: 2rem; margin-bottom: 2rem; background: #f8f9fa; padding: 1.5rem; border-radius: 12px; border: 1px dashed var(--babylon-border);">
-                <div style="flex: 1;">
-                    <div style="font-size: 0.75rem; font-weight: 800; color: #059669; text-transform: uppercase;">Active
-                        Time</div>
+                style="padding: 1.5rem 2rem; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; background: {% if task.status == 'active' %}#fffbeb{% elif task.status == 'break' %}#fef2f2{% else %}#fff{% endif %};">
+                <div>
+                    <span class="status-badge" style="position: static; margin-bottom: 8px;">{{ task.status }}</span>
+                    <h3 style="font-size: 1.4rem; color: var(--babylon-navy); margin: 0;">{{ task.description }}</h3>
+                    <div style="font-size: 0.85rem; color: #7f8c8d; margin-top: 4px;">MO Reference: <strong
+                            style="color: var(--babylon-navy);">{{ task.mo_reference }}</strong></div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 0.7rem; font-weight: 800; color: #7f8c8d; text-transform: uppercase;">Hourly
+                        Rate</div>
+                    <div style="font-size: 1.2rem; font-weight: 800; color: var(--babylon-navy);">${{
+                        "%.2f"|format(task.hourly_rate) }}<span style="font-size: 0.8rem; opacity: 0.5;">/hr</span>
+                    </div>
+                </div>
+            </div>
+
+            <div
+                style="padding: 2rem; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; text-align: center;">
+                <div style="padding: 1rem; background: #f0fdf4; border-radius: 15px;">
+                    <div
+                        style="font-size: 0.7rem; font-weight: 800; color: #16a34a; text-transform: uppercase; margin-bottom: 5px;">
+                        Active Work</div>
                     <div class="live-active-timer"
-                        style="font-size: 2.2rem; font-family: monospace; font-weight: 800; color: var(--babylon-navy);">
+                        style="font-size: 1.8rem; font-family: 'Poppins'; font-weight: 800; color: var(--babylon-navy);">
                         {{ format_seconds(task.active_seconds) }}
                     </div>
                 </div>
-                <div style="flex: 1; border-left: 1px solid #ddd; padding-left: 2rem;">
-                    <div style="font-size: 0.75rem; font-weight: 800; color: #dc2626; text-transform: uppercase;">
-                        Non-Active Time</div>
+                <div style="padding: 1rem; background: #fff1f2; border-radius: 15px;">
+                    <div
+                        style="font-size: 0.7rem; font-weight: 800; color: #e11d48; text-transform: uppercase; margin-bottom: 5px;">
+                        Break Time</div>
                     <div class="live-break-timer"
-                        style="font-size: 2.2rem; font-family: monospace; font-weight: 800; color: #7f8c8d;">
+                        style="font-size: 1.8rem; font-family: 'Poppins'; font-weight: 800; color: #7f8c8d;">
                         {{ format_seconds(task.break_seconds) }}
                     </div>
                 </div>
-                <div style="flex: 1; border-left: 1px solid #ddd; padding-left: 2rem;">
+                <div style="padding: 1rem; background: #fffbeb; border-radius: 15px; border: 1px solid #fef3c7;">
                     <div
-                        style="font-size: 0.75rem; font-weight: 800; color: var(--babylon-navy); text-transform: uppercase;">
-                        Estimated Pay</div>
+                        style="font-size: 0.7rem; font-weight: 800; color: var(--babylon-gold); text-transform: uppercase; margin-bottom: 5px;">
+                        Est. Earnings</div>
                     <div class="live-earned-amount" data-rate="{{ task.hourly_rate }}"
-                        style="font-size: 2.2rem; font-family: 'Poppins'; font-weight: 800; color: var(--babylon-gold);">
+                        style="font-size: 1.8rem; font-family: 'Poppins'; font-weight: 800; color: var(--babylon-navy);">
                         ${{ "%.2f"|format(task.amount_earned) }}
                     </div>
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div style="padding: 0 2rem 2rem; display: flex; gap: 1rem;">
                 {% if task.status == 'pending' %}
-                <button class="btn btn-primary" style="grid-column: 1 / -1;"
+                <button class="btn btn-primary" style="flex: 1; padding: 1.2rem; font-size: 1rem;"
                     onclick="taskAction('{{ task.id }}', 'start')">START WORKFLOW</button>
                 {% elif task.status == 'active' %}
-                <button class="btn btn-primary" onclick="taskAction('{{ task.id }}', 'complete')">MARK AS
-                    COMPLETED</button>
-                <button class="btn btn-danger" onclick="showBreakModal('{{ task.id }}')">TAKE A BREAK</button>
+                <button class="btn btn-primary" style="flex: 2; padding: 1.2rem; font-size: 1rem;"
+                    onclick="taskAction('{{ task.id }}', 'complete')">✓ COMPLETE WORKFLOW</button>
+                <button class="btn btn-danger" style="flex: 1; padding: 1.2rem; font-size: 1rem; background: #dc2626;"
+                    onclick="showBreakModal('{{ task.id }}')">PAUSE / BREAK</button>
                 {% elif task.status == 'break' %}
-                <button class="btn btn-primary" style="grid-column: 1 / -1;"
+                <button class="btn btn-primary"
+                    style="flex: 1; padding: 1.2rem; font-size: 1rem; background: var(--babylon-gold); border-color: var(--babylon-gold);"
                     onclick="taskAction('{{ task.id }}', 'resume')">RESUME WORKFLOW</button>
                 {% elif task.status == 'completed' %}
                 <div
-                    style="grid-column: 1 / -1; background: #ecfdf5; color: #065f46; padding: 1rem; border-radius: 12px; font-weight: 700; text-align: center;">
-                    ✓ WORKFLOW FINALIZED
+                    style="flex: 1; background: #ecfdf5; color: #065f46; padding: 1.2rem; border-radius: 99px; font-weight: 800; text-align: center; border: 1px solid #10b981;">
+                    ✓ WORKFLOW FINALIZED & SAVED
                 </div>
                 {% endif %}
             </div>

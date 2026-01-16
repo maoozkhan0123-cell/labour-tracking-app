@@ -3,6 +3,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from .models import User, Task
 from datetime import datetime
 from firebase_admin import firestore
+from .odoo_utils import odoo
 import uuid
 
 main_bp = Blueprint('main', __name__)
@@ -66,12 +67,15 @@ def manager_dashboard():
         
         status = 'Free'
         current_job = ""
+        current_mo = ""
         if current_status_task:
             status = 'Working'
             current_job = current_status_task.description
+            current_mo = current_status_task.mo_reference
         elif break_status_task:
             status = 'On Break'
             current_job = break_status_task.description
+            current_mo = break_status_task.mo_reference
 
         person_summary[emp.id] = {
             'active_sec': active_sec,
@@ -79,13 +83,32 @@ def manager_dashboard():
             'total_sec': active_sec + break_sec,
             'total_earned': sum(t.amount_earned for t in emp_tasks),
             'status': status,
-            'current_job': current_job
+            'current_job': current_job,
+            'current_mo': current_mo
         }
     
     return render_template('manager_dashboard.html', 
                           employees=employees, 
                           tasks=tasks, 
                           person_summary=person_summary)
+
+@main_bp.route('/api/get_odoo_mos')
+@login_required
+def get_odoo_mos():
+    search = request.args.get('search')
+    mos = odoo.get_active_mo_list(search_query=search)
+    return jsonify(mos)
+
+@main_bp.route('/api/task/<task_id>/cancel', methods=['POST'])
+@login_required
+def cancel_task(task_id):
+    if current_user.role != 'manager':
+        return jsonify({'error': 'Unauthorized'}), 403
+    db = firestore.client()
+    db.collection('tasks').document(task_id).update({
+        'status': 'cancelled'
+    })
+    return jsonify({'success': True})
 
 @main_bp.route('/api/assign_task', methods=['POST'])
 @login_required
