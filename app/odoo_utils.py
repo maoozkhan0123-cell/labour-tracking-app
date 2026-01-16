@@ -26,15 +26,21 @@ class OdooClient:
         
         try:
             models = xmlrpc.client.ServerProxy(f'{self.url}/xmlrpc/2/object')
-            domain = [('state', 'in', ['confirmed', 'progress'])]
+            # Broader search: include planned and draft if confirmed/progress isn't enough
+            domain = [('state', 'in', ['confirmed', 'progress', 'planned', 'to_close'])]
             if search_query:
+                domain.append('|')
                 domain.append(('name', 'ilike', search_query))
+                domain.append(('product_id.name', 'ilike', search_query))
                 
             mo_ids = models.execute_kw(self.db, self.uid, self.password,
-                'mrp.production', 'search', [domain], {'limit': limit})
+                'mrp.production', 'search', [domain], {'limit': limit, 'order': 'date_planned_start desc'})
             
+            if not mo_ids:
+                return []
+
             mos = models.execute_kw(self.db, self.uid, self.password,
-                'mrp.production', 'read', [mo_ids], {'fields': ['name', 'product_id', 'qty_producing']})
+                'mrp.production', 'read', [mo_ids], {'fields': ['name', 'product_id', 'qty_producing', 'state']})
             
             return mos
         except Exception as e:

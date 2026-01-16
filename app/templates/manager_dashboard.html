@@ -263,6 +263,7 @@
                     <option value="Weighing">Weighing</option>
                     <option value="Filling">Filling</option>
                     <option value="Shipping">Shipping</option>
+                    <option value="Cleaning">Cleaning</option>
                 </select>
             </div>
             <div class="form-group">
@@ -289,16 +290,17 @@
                     %} data-last-break-start="{{ task.last_action_time.isoformat() }}"
                     data-base-break-seconds="{{ task.break_seconds }}" {% endif %}>
 
-                    {% if task.status == 'pending' %}
-                    <button class="cancel-btn" onclick="cancelTask('{{ task.id }}')"
-                        style="position: absolute; right: 10px; top: 10px; border: none; background: #fee2e2; color: #dc2626; padding: 5px 10px; border-radius: 8px; font-size: 0.65rem; font-weight: 800; cursor: pointer;">
-                        <i class="fa-solid fa-xmark"></i> CANCEL
-                    </button>
-                    {% endif %}
-
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div style="flex: 1;">
-                            <span class="status-badge">{{ task.status }}</span>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                                <span class="status-badge" style="margin-bottom: 0;">{{ task.status }}</span>
+                                {% if task.status == 'pending' %}
+                                <button onclick="cancelTask('{{ task.id }}')"
+                                    style="border: none; background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 6px; font-size: 0.6rem; font-weight: 800; cursor: pointer;">
+                                    <i class="fa-solid fa-xmark"></i> CANCEL
+                                </button>
+                                {% endif %}
+                            </div>
                             <h4 style="color: var(--babylon-navy); margin:0.2rem 0; font-size: 0.95rem;">{{
                                 task.description }}</h4>
                             <div class="mo-detail" style="font-size: 0.75rem;"><strong>{{ task.assigned_to.name
