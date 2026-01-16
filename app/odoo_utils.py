@@ -3,9 +3,10 @@ import os
 
 class OdooClient:
     def __init__(self):
-        self.url = os.environ.get('ODOO_URL', 'https://your-odoo-url.com')
+        # Handle both naming conventions
+        self.url = os.environ.get('ODOO_URL', 'https://your-odoo-url.com').rstrip('/')
         self.db = os.environ.get('ODOO_DB', 'your-db-name')
-        self.username = os.environ.get('ODOO_USER', 'your-username')
+        self.username = os.environ.get('ODOO_USER') or os.environ.get('ODOO_USERNAME') or 'your-username'
         self.password = os.environ.get('ODOO_PASSWORD', 'your-api-key')
         self.uid = None
 
@@ -13,11 +14,13 @@ class OdooClient:
         if self.uid:
             return True
         try:
+            print(f"Connecting to Odoo: {self.url} | DB: {self.db} | User: {self.username}")
             common = xmlrpc.client.ServerProxy(f'{self.url}/xmlrpc/2/common')
             self.uid = common.authenticate(self.db, self.username, self.password, {})
+            print(f"Odoo Auth Result UID: {self.uid}")
             return self.uid is not None
         except Exception as e:
-            print(f"Odoo Connection Error: {e}")
+            print(f"Odoo Connection Error: {str(e)}")
             return False
 
     def get_active_mo_list(self, limit=10, search_query=None):
