@@ -5,8 +5,14 @@ import os
 
 def create_app():
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'dev-key-123'
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app_v5.db'
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-123')
+    
+    # Use /tmp for SQLite in Vercel or a persistent DB if defined in env
+    database_uri = os.environ.get('DATABASE_URL')
+    if database_uri and database_uri.startswith("postgres://"):
+        database_uri = database_uri.replace("postgres://", "postgresql://", 1)
+    
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_uri or 'sqlite:///app_v5.db'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     db.init_app(app)

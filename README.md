@@ -1,24 +1,67 @@
-# Odoo Labor Tracker
+# Babylon LLC Labor Tracker Portal
 
-A custom interface to connect Odoo's high-level Manufacturing Orders (MO) with granular, task-level labor tracking.
+A premium, minimalistic labor tracking and payroll management system built for **Babylon LLC**. This application allows managers to dispatch workflows (tasks) to employees, track work/break time with high precision, and calculate earned pay in real-time.
 
-## Objectives
-- **Fetch**: Pull "Confirmed" MOs and Work Orders from Odoo.
-- **Action**: Manager assigns laborers; Laborers start/stop timers on specific tasks.
-- **Sync**: Push Timesheet Entries (`account.analytic.line`) back to Odoo upon completion.
+![Babylon Branding](https://babylonllc.com/wp-content/uploads/2021/08/Babylon-Logo-White.png)
 
-## Tech Stack
-- **Backend**: Python (Flask)
-- **Frontend**: HTML5, CSS3 (Custom Glassmorphism Design), JavaScript (Vanilla)
-- **Integration**: Odoo XML-RPC API
+## 🚀 Key Features
 
-## Setup
-1. Install dependencies: `pip install -r requirements.txt`
-2. Copy `.env.example` to `.env` and fill in your Odoo credentials.
-3. Run the app: `python run.py`
+- **Dual-Portal Access**: Dedicated interfaces for Admins (Managers) and Employees.
+- **Real-Time Tracking**: High-precision timers for active work and non-active (break) periods.
+- **Live Earnings**: Instant calculation of pay based on active work time and assigned hourly rates.
+- **Group Assignments**: Managers can assign a single task to multiple employees simultaneously.
+- **Interactive Dashboard**: Expandable employee cards showing detailed task history and performance.
+- **Hiring System**: Integrated module for onboarding new employees with custom rates.
+- **Premium UI**: Clean, white-themed interface with Babylon Navy and Gold branding.
 
-## Features
-- Manager Dashboard: View active MOs, Assign tasks.
-- Labor Interface: Big Timer, Start/Stop buttons.
-- Odoo Sync: Automatic updates to `account.analytic.line`.
+## 🛠️ Technology Stack
 
+- **Backend**: Python / Flask
+- **Database**: SQLite (Local) / PostgreSQL (Optional Cloud)
+- **Frontend**: HTML5, Vanilla CSS3 (Custom Design System), JavaScript (ES6+)
+- **Icons**: Font Awesome 6
+- **Deployment**: Optimized for Vercel
+
+## 📦 Setup & Installation
+
+### Local Development
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/HananBajwa12/Labour-Tracker-app.git
+   cd Labour-Tracker-app
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Run the application**:
+   ```bash
+   python run.py
+   ```
+   The app will be available at `http://localhost:8001`.
+
+### Default Credentials
+- **Admin**: `admin` / `123`
+- **Employees**: `emp1` / `123`, `emp2` / `123`
+
+## ☁️ Vercel Deployment
+
+This project is pre-configured for Vercel.
+
+1. Install Vercel CLI: `npm i -g vercel`
+2. Run `vercel` in the root directory.
+3. Follow the prompts to deploy.
+
+**Note on Database**: Since Vercel is serverless, the local SQLite database will restart on every deployment. For persistent storage, connect a PostgreSQL database via environment variables (`DATABASE_URL`).
+
+## 🧱 Project Structure
+
+- `app/`: Core application logic (models, routes, templates).
+- `static/`: CSS and styling assets.
+- `index.py`: Entry point for Vercel deployment.
+- `vercel.json`: Vercel configuration for Python runtime.
+
+## 📄 License
+Custom built for Babylon LLC. All rights reserved.

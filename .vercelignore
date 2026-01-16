@@ -1,0 +1,7 @@
+.git/
+__pycache__/
+*.pyc
+instance/
+*.db
+.env
+.ipynb_checkpoints/
