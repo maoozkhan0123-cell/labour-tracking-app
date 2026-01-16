@@ -10,21 +10,32 @@ def create_app():
     
     # Initialize Firebase
     if not firebase_admin._apps:
+        cred = None
         key_path = os.path.join(app.root_path, '..', 'firebase-key.json')
+        
+        # 1. Try local file
         if os.path.exists(key_path):
             cred = credentials.Certificate(key_path)
         else:
-            import json
+            # 2. Try Environment Variable
             config = os.environ.get('FIREBASE_CONFIG')
             if config:
-                cred = credentials.Certificate(json.loads(config))
-                firebase_admin.initialize_app(cred)
-            else:
-                # Local discovery if credentials are set in environment
-                firebase_admin.initialize_app()
+                import json
+                try:
+                    cred_dict = json.loads(config)
+                    cred = credentials.Certificate(cred_dict)
+                except Exception as e:
+                    print(f"Error parsing FIREBASE_CONFIG: {e}")
         
-        if not firebase_admin._apps:
-             firebase_admin.initialize_app(cred)
+        if cred:
+            firebase_admin.initialize_app(cred)
+        else:
+            # 3. Fallback to default (usually for local dev with GOOGLE_APPLICATION_CREDENTIALS)
+            try:
+                firebase_admin.initialize_app()
+            except Exception as e:
+                print(f"Firebase Default Initialization Failed: {e}")
+                # If we're here, firestore.client() will fail later, but we've handled the crash here
 
     db = firestore.client()
     
