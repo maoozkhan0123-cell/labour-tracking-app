@@ -10,51 +10,58 @@ main_bp = Blueprint('main', __name__)
 def get_person_summary(employees, tasks):
     person_summary = {}
     now = datetime.utcnow()
-    
+
+    def to_naive(dt):
+        if not dt:
+            return now
+        if hasattr(dt, 'to_datetime'):
+            return dt.to_datetime().replace(tzinfo=None)
+        if isinstance(dt, datetime):
+            return dt.replace(tzinfo=None)
+        return dt
+
     for emp in employees:
         emp_tasks = [t for t in tasks if t.assigned_to_id == emp.id]
-        active_sec = sum(t.active_seconds for t in emp_tasks)
-        break_sec = sum(t.break_seconds for t in emp_tasks)
-        
-        # Check current status in Firestore
+        active_sec = sum(t.active_seconds or 0 for t in emp_tasks)
+        break_sec = sum(t.break_seconds or 0 for t in emp_tasks)
+
+        # Check current status
         current_status_task = next((t for t in tasks if t.assigned_to_id == emp.id and t.status == 'active'), None)
         break_status_task = next((t for t in tasks if t.assigned_to_id == emp.id and t.status == 'break'), None)
-        
-        # Live calculations for active/break time
+
+        # Live calculations
         current_active = active_sec
         current_break = break_sec
-        
+
         status = 'Free'
         current_job = ""
         current_mo = ""
-        
+
         if current_status_task:
             status = 'Working'
             current_job = current_status_task.description
             current_mo = current_status_task.mo_reference
-            last_act = current_status_task.last_action_time
-            if last_act:
-                if not isinstance(last_act, datetime):
-                    last_act = last_act.replace(tzinfo=None)
-                diff = (now - last_act).total_seconds()
-                current_active += int(max(0, diff))
+            last_act = to_naive(current_status_task.last_action_time)
+            diff = (now - last_act).total_seconds()
+            current_active += int(max(0, diff))
         elif break_status_task:
             status = 'On Break'
             current_job = break_status_task.description
             current_mo = break_status_task.mo_reference
-            last_act = break_status_task.last_action_time
-            if last_act:
-                if not isinstance(last_act, datetime):
-                    last_act = last_act.replace(tzinfo=None)
-                diff = (now - last_act).total_seconds()
-                current_break += int(max(0, diff))
+            last_act = to_naive(break_status_task.last_action_time)
+            diff = (now - last_act).total_seconds()
+            current_break += int(max(0, diff))
+
+        earned_from_completed = sum((t.active_seconds or 0) / 3600.0 * (t.hourly_rate or 0) for t in emp_tasks)
+        earned_now = 0
+        if current_status_task:
+            earned_now = (current_active - active_sec) / 3600.0 * (current_status_task.hourly_rate or 0)
 
         person_summary[emp.id] = {
             'active_sec': current_active,
             'break_sec': current_break,
             'total_sec': current_active + current_break,
-            'total_earned': sum(t.active_seconds / 3600.0 * t.hourly_rate for t in emp_tasks) + \
-                           ((current_active - active_sec) / 3600.0 * (current_status_task.hourly_rate if current_status_task else 0)),
+            'total_earned': earned_from_completed + earned_now,
             'status': status,
             'current_job': current_job,
             'current_mo': current_mo
@@ -92,21 +99,25 @@ def logout():
 @main_bp.route('/manager_dashboard')
 @login_required
 def manager_dashboard():
-    # ... existing code ...
     if current_user.role != 'manager':
         return redirect(url_for('main.index'))
-    
+
     db = firestore.client()
+    # Get all employees
     employees_stream = db.collection('users').where('role', '==', 'employee').stream()
     employees = [User(id=doc.id, **doc.to_dict()) for doc in employees_stream]
+
     tasks = Task.get_all()
-    
     person_summary = get_person_summary(employees, tasks)
-    
-    return render_template('manager_dashboard.html', 
-                          employees=employees, 
-                          tasks=tasks, 
-                          person_summary=person_summary)
+
+    # Prepare active MOs for the dashboard
+    active_mos = sorted(list(set(t.mo_reference for t in tasks if t.status == 'active')))
+
+    return render_template('manager_dashboard.html',
+                           employees=employees,
+                           tasks=tasks,
+                           person_summary=person_summary,
+                           active_mos=active_mos)
 
 @main_bp.route('/control-matrix')
 @login_required

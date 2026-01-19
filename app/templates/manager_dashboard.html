@@ -155,13 +155,6 @@
                 </div>
 
                 <div class="list-container">
-                    {% set active_mos = [] %}
-                    {% for t in tasks %}
-                    {% if t.status == 'active' and t.mo_reference not in active_mos %}
-                    {% set _ = active_mos.append(t.mo_reference) %}
-                    {% endif %}
-                    {% endfor %}
-
                     {% if active_mos %}
                     {% for mo in active_mos %}
                     <a href="{{ url_for('main.control_matrix') }}" class="list-item"
