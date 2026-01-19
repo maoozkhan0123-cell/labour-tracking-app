@@ -11,8 +11,8 @@
         rel="stylesheet">
     <style>
         :root {
-            --babylon-navy: #1b1b4b;
-            --babylon-gold: #edad2f;
+            --babylon-navy: #262661;
+            --babylon-gold: #EDAD2F;
         }
 
         body {
@@ -169,40 +169,9 @@
         {% endwith %}
 
         <form method="POST" class="login-form">
-            <div
-                style="background: #f8f9fa; border-radius: 12px; padding: 4px; display: flex; margin-bottom: 1.5rem; position: relative; border: 1px solid #eee;">
-                <input type="radio" name="role" value="manager" id="role-admin" checked style="display:none;">
-                <input type="radio" name="role" value="employee" id="role-emp" style="display:none;">
-
-                <label for="role-admin" id="label-admin"
-                    style="flex:1; text-align:center; padding: 10px; font-size: 0.8rem; font-weight: 700; cursor:pointer; z-index:1; transition:0.3s; color: var(--babylon-navy);">ADMIN</label>
-                <label for="role-emp" id="label-emp"
-                    style="flex:1; text-align:center; padding: 10px; font-size: 0.8rem; font-weight: 700; cursor:pointer; z-index:1; transition:0.3s; color: #a0aec0;">EMPLOYEE</label>
-
-                <div id="role-glider"
-                    style="position:absolute; width: 50%; height: calc(100% - 8px); background: white; border-radius: 8px; left: 4px; top: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);">
-                </div>
-            </div>
-
-            <script>
-                document.querySelectorAll('input[name="role"]').forEach(radio => {
-                    radio.addEventListener('change', (e) => {
-                        const glider = document.getElementById('role-glider');
-                        const labelAdmin = document.getElementById('label-admin');
-                        const labelEmp = document.getElementById('label-emp');
-
-                        if (e.target.value === 'employee') {
-                            glider.style.left = 'calc(50% - 4px)';
-                            labelAdmin.style.color = '#a0aec0';
-                            labelEmp.style.color = 'var(--babylon-navy)';
-                        } else {
-                            glider.style.left = '4px';
-                            labelAdmin.style.color = 'var(--babylon-navy)';
-                            labelEmp.style.color = '#a0aec0';
-                        }
-                    });
-                });
-            </script>
+            <h2
+                style="font-size: 0.85rem; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2rem; text-align: center;">
+                Administrator Login</h2>
 
             <div class="input-group">
                 <input type="text" name="username" required placeholder="Username" autocomplete="username">

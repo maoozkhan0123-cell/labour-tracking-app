@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Matrix - WorkTrack</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+
+<body>
+
+    <!-- Sidebar Toggle -->
+    <div class="sidebar-toggle" onclick="toggleSidebar()">
+        <i class="fa-solid fa-bars"></i>
+    </div>
+
+    <!-- Sidebar (Shared navigation) -->
+    <nav class="sidebar collapsed">
+        <div class="brand">
+            <div class="brand-icon">
+                <i class="fa-regular fa-clock"></i>
+            </div>
+            WorkTrack
+        </div>
+        <ul class="nav-menu">
+            <li><a href="{{ url_for('main.manager_dashboard') }}" class="nav-item">
+                    <i class="fa-solid fa-border-all"></i> Dashboard
+                </a></li>
+            <li><a href="{{ url_for('main.control_matrix') }}" class="nav-item active">
+                    <i class="fa-solid fa-table-cells"></i> Control Matrix
+                </a></li>
+            <li><a href="{{ url_for('main.manufacturing_orders') }}" class="nav-item">
+                    <i class="fa-regular fa-clipboard"></i> Manufacturing Orders
+                </a></li>
+            <li><a href="{{ url_for('main.employee_activity') }}" class="nav-item">
+                    <i class="fa-solid fa-users-viewfinder"></i> Employee Activity
+                </a></li>
+            <li><a href="{{ url_for('main.workers') }}" class="nav-item">
+                    <i class="fa-regular fa-user"></i> Workers
+                </a></li>
+            <li><a href="{{ url_for('main.operations') }}" class="nav-item">
+                    <i class="fa-solid fa-list-check"></i> Operations
+                </a></li>
+            <li><a href="{{ url_for('main.reports') }}" class="nav-item">
+                    <i class="fa-solid fa-chart-column"></i> Reports
+                </a></li>
+        </ul>
+        <div class="bottom-menu">
+            <ul class="nav-menu">
+                <li><a href="{{ url_for('main.logout') }}" class="nav-item"><i
+                            class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content expanded">
+        <div class="page-header" style="display:flex; justify-content:space-between; align-items:flex-end;">
+            <div>
+                <h1 class="page-title">Production Control Matrix</h1>
+                <p class="page-subtitle">Click any cell to assign workers and control timers</p>
+            </div>
+            <button class="btn btn-secondary" onclick="openManualEntryModal()"
+                style="width: auto; padding: 0.6rem 1.5rem;">
+                <i class="fa-solid fa-plus"></i> Manual Entry
+            </button>
+        </div>
+
+        <div class="matrix-container">
+            <div class="matrix-grid">
+
+                <!-- Header Row (Operations as Columns) -->
+                <div class="matrix-row">
+                    <div class="matrix-header-cell" style="text-align: left; padding-left: 20px;">
+                        <span style="color: var(--text-muted); font-weight: 600;"><i
+                                class="fa-regular fa-clipboard"></i> Manufacturing Orders</span>
+                    </div>
+                    {% for op in operations %}
+                    <div class="matrix-header-cell">
+                        <div style="font-weight:700; color:var(--text-main);">{{ op }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Matrix Rows (MOs as Rows) -->
+                {% for mo in mos %}
+                <div class="matrix-row" id="mo-{{ mo.name }}">
+                    <!-- Row Label (MO Info) -->
+                    <div class="matrix-label-cell" style="width: 200px;">
+                        <a href="{{ url_for('main.manufacturing_orders') }}" class="mo-badge"
+                            style="text-decoration: none;">{{ mo.name }}</a>
+                        <div class="mo-details" style="font-size:0.8rem;">{{ mo.product_id[1] }}</div>
+                        <div style="margin-top:4px;">
+                            <span class="status-badge badge-{{ mo.state }}">{{ mo.state }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Cells for each Operation -->
+                    {% for op in operations %}
+
+                    <!-- Determine cell state -->
+                    {% set cell_tasks = [] %}
+                    {% for t in tasks %}
+                    {% if t.mo_reference == mo.name and t.description == op %}
+                    {% set _ = cell_tasks.append(t) %}
+                    {% endif %}
+                    {% endfor %}
+
+                    <div class="matrix-cell {% if cell_tasks %}active-cell{% endif %}"
+                        onclick="openAssign('{{ mo.name }}', '{{ op }}')">
+                        {% if cell_tasks %}
+                        <div style="display:flex; flex-direction:column; justify-content:space-between; height:100%;">
+                            <div>
+                                <div style="font-weight:700; color:var(--text-main); margin-bottom:4px;">
+                                    <i class="fa-solid fa-user-group"
+                                        style="color:var(--text-muted); margin-right:4px;"></i>
+                                    {{ cell_tasks|length }} workers
+                                </div>
+                            </div>
+
+                            {% set has_active = false %}
+                            {% for t in cell_tasks %}
+                            {% if t.status == 'active' %}
+                            {% set has_active = true %}
+                            {% endif %}
+                            {% endfor %}
+
+                            <div class="active-workers-pill {{ 'active' if has_active else 'unactive' }}"
+                                style="margin-top: 8px; width: fit-content; padding: 6px 12px; border-radius: 8px;">
+                                <i class="fa-solid {{ 'fa-circle-play' if has_active else 'fa-circle-pause' }}"
+                                    style="font-size: 0.8rem;"></i>
+                                <span style="font-size: 0.8rem; font-weight: 600;">{{ 'Active' if has_active else 'Un
+                                    active' }}</span>
+                            </div>
+
+                            <div style="display:flex; align-items:center; margin-top:8px;">
+                                {% for t in cell_tasks[:3] %}
+                                {% set worker = emp_map.get(t.assigned_to_id) %}
+                                <a href="{{ url_for('main.employee_activity') }}" class="worker-avatar"
+                                    title="{{ worker.name if worker else 'Unknown' }}" style="text-decoration: none;">
+                                    {{ worker.name[0] if worker else '?' }}
+                                </a>
+                                {% endfor %}
+                                {% if cell_tasks|length > 3 %}
+                                <span class="worker-avatar" style="background:#CBD5E1; color:var(--text-muted);">+{{
+                                    cell_tasks|length - 3 }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="matrix-cell-empty">
+                            Click to assign
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Overlay (for closing offcanvas) -->
+    <div id="overlay" class="overlay" onclick="closeAssign()"></div>
+
+    <!-- Offcanvas Sidebar -->
+    <div id="assignSidebar" class="offcanvas"
+        style="width: 800px; right: -850px; padding: 0; box-shadow: -10px 0 30px rgba(0,0,0,0.15);">
+        <div style="padding: 2rem; border-bottom: 1px solid var(--border); position: relative; background: #fff;">
+            <button class="close-btn" onclick="closeAssign()" style="position: absolute; right: 2rem; top: 2rem;"><i
+                    class="fa-solid fa-xmark"></i></button>
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                <span id="headerMO" class="badge badge-blue"
+                    style="font-size: 0.75rem; padding: 0.2rem 0.6rem;">MO-000</span>
+                <i class="fa-solid fa-arrow-right" style="color: #9CA3AF; font-size: 0.8rem;"></i>
+                <span id="headerOp" class="badge"
+                    style="font-size: 0.75rem; padding: 0.2rem 0.6rem; background: #FAF5FF; color: #7E22CE;">Operation</span>
+            </div>
+            <h2 id="headerProduct" style="font-size: 1.1rem; color: var(--text-muted); font-weight: 500;">Product Name
+            </h2>
+        </div>
+
+        <div class="offcanvas-body" style="padding: 2rem;">
+            <!-- Assign Worker Section -->
+            <div
+                style="background: white; border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: var(--shadow-sm);">
+                <h3 style="font-size: 0.95rem; font-weight: 700; color: #1E293B; margin-bottom: 1.25rem;">Assign Worker
+                </h3>
+                <div style="display: flex; gap: 0.75rem;">
+                    <div style="flex: 2; position: relative;">
+                        <select id="workerSelect"
+                            style="width: 100%; height: 50px; padding: 0 1rem; border-radius: 10px; border: 1.5px solid #E2E8F0; background: white; appearance: none; font-size: 1rem; color: var(--text-main); font-weight: 500; outline: none; transition: border-color 0.2s;">
+                            <option value="">Select a worker...</option>
+                            {% for emp in employees %}
+                            <option value="{{ emp.id }}" data-rate="{{ emp.hourly_rate }}">{{ emp.name }} (${{
+                                "%.2f"|format(emp.hourly_rate) }}/hr)</option>
+                            {% endfor %}
+                        </select>
+                        <i class="fa-solid fa-chevron-down"
+                            style="position: absolute; right: 1rem; top: 1.1rem; color: #9CA3AF; pointer-events: none;"></i>
+                    </div>
+                    <button class="btn btn-primary" onclick="assignSingleWorker()"
+                        style="flex: 1; height: 50px; display: flex; align-items: center; justify-content: center; gap: 0.5rem; border-radius: 10px; font-weight: 700; background: #9F97F7; color: white; border: none;">
+                        <i class="fa-solid fa-plus"></i> Assign
+                    </button>
+                </div>
+            </div>
+
+            <!-- Assigned Workers Section -->
+            <div id="assignedSection">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                    <h3 id="assignedCountLabel"
+                        style="font-size: 0.9rem; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">
+                        ASSIGNED WORKERS (0)</h3>
+                </div>
+
+                <div id="assignedList" style="display: flex; flex-direction: column; gap: 1rem;">
+                    <!-- Placeholder when empty -->
+                    <div id="noWorkersState"
+                        style="border: 2px dashed #E2E8F0; border-radius: 16px; padding: 4rem 2rem; text-align: center; color: #94A3B8;">
+                        <div
+                            style="background: #F8FAFC; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                            <i class="fa-regular fa-user" style="font-size: 1.5rem; opacity: 0.5;"></i>
+                        </div>
+                        <div style="font-weight: 700; font-size: 1.1rem; color: #1E293B;">No workers assigned</div>
+                        <p style="font-size: 0.95rem; margin-top: 0.5rem; color: #64748B;">Add workers to this operation
+                            to begin tracking</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        /* Matrix specific refinements */
+        .matrix-container {
+            overflow-x: auto;
+            background: white;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 1rem;
+        }
+
+        .timer-badge {
+            font-family: 'JetBrains Mono', 'Monaco', monospace;
+            font-weight: 800;
+            color: #1E293B;
+            font-size: 1.2rem;
+            letter-spacing: -0.5px;
+        }
+
+        .worker-card {
+            background: #fff;
+            border: 1px solid #E2E8F0;
+            border-radius: 14px;
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+        }
+
+        .worker-card:hover {
+            border-color: #9F97F7;
+            box-shadow: 0 8px 15px rgba(159, 151, 247, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .avatar-lg {
+            width: 52px;
+            height: 52px;
+            background: #4F46E5;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            font-weight: 700;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+        }
+
+        .status-pill {
+            font-size: 0.65rem;
+            font-weight: 800;
+            padding: 5px 12px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            display: inline-block;
+            text-align: center;
+            min-width: 85px;
+        }
+
+        .pill-running {
+            background: #ECFDF5;
+            color: #059669;
+            border: 1px solid #D1FAE5;
+        }
+
+        .pill-paused {
+            background: #F8FAFC;
+            color: #64748B;
+            border: 1px solid #E2E8F0;
+        }
+
+        .active-workers-pill {
+            font-size: 0.7rem;
+            font-weight: 800;
+            padding: 4px 8px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .active-workers-pill.active {
+            background: #ECFDF5;
+            color: #10B981;
+            border: 1px solid #D1FAE5;
+        }
+
+        .active-workers-pill.unactive {
+            background: #F8FAFC;
+            color: #64748B;
+            border: 1px solid #E2E8F0;
+        }
+
+        /* Action Buttons - Outline Style */
+        .action-btn-outline {
+            height: 44px;
+            padding: 0 1.25rem;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.6rem;
+            transition: all 0.2s;
+            background: white;
+            white-space: nowrap;
+        }
+
+        .action-btn-outline:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            filter: grayscale(1);
+        }
+
+        .btn-clockin {
+            border: 1.5px solid #10B981;
+            color: #059669;
+        }
+
+        .btn-clockin:hover:not(:disabled) {
+            background: #ECFDF5;
+            box-shadow: 0 4px 10px rgba(16, 185, 129, 0.15);
+        }
+
+        .btn-pause {
+            border: 1.5px solid #F59E0B;
+            color: #D97706;
+        }
+
+        .btn-pause:hover:not(:disabled) {
+            background: #FFFBEB;
+            box-shadow: 0 4px 10px rgba(245, 158, 11, 0.15);
+        }
+
+        .btn-stop {
+            border: 1.5px solid #EF4444;
+            color: #DC2626;
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            background: #FEF2F2;
+            box-shadow: 0 4px 10px rgba(239, 68, 68, 0.15);
+        }
+
+        .trash-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94A3B8;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: all 0.2s;
+            border-radius: 10px;
+        }
+
+        .trash-btn:hover {
+            color: #EF4444;
+            background: #FEF2F2;
+        }
+
+        .offcanvas {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            /* Prevent slider */
+        }
+
+        .offcanvas-body {
+            overflow-y: auto;
+            overflow-x: hidden;
+            width: 100%;
+        }
+    </style>
+
+    <!-- Manual Entry Modal -->
+    <div id="manualEntryModal" class="offcanvas"
+        style="right: auto; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 500px; height: auto; border-radius: 12px; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 1001;">
+        <div class="offcanvas-header" style="margin-bottom: 1.5rem; padding: 2rem 2rem 1rem;">
+            <h3 class="offcanvas-title" style="font-size: 1.25rem; font-weight: 700;">Manual Labor Entry</h3>
+            <button class="close-btn" onclick="closeManualEntryModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="offcanvas-body" style="padding:0 2rem 2rem;">
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <div>
+                    <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #475569;">MO
+                        Reference</label>
+                    <select id="manual_mo"
+                        style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border);">
+                        <option value="">Select MO...</option>
+                        {% for mo in mos %}
+                        <option value="{{ mo.name }}">{{ mo.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label
+                        style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #475569;">Operation</label>
+                    <select id="manual_op"
+                        style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border);">
+                        <option value="">Select Operation...</option>
+                        {% for op in operations %}
+                        <option value="{{ op }}">{{ op }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label
+                        style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #475569;">Worker</label>
+                    <select id="manual_worker"
+                        style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border);">
+                        <option value="">Select Worker...</option>
+                        {% for emp in employees %}
+                        <option value="{{ emp.id }}">{{ emp.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <div style="flex: 1;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #475569;">Start
+                            Time</label>
+                        <input type="datetime-local" id="manual_start"
+                            style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border);">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #475569;">End
+                            Time</label>
+                        <input type="datetime-local" id="manual_end"
+                            style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border);">
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="submitManualEntry()"
+                    style="margin-top: 1rem; width: 100%; padding: 0.75rem 0;">Submit Entry</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pause Reason Modal -->
+    <div id="pauseModal" class="custom-modal"
+        style="width: 450px; padding: 0; border-radius: 16px; overflow: hidden; background: white;">
+        <div class="modal-header"
+            style="padding: 1.5rem 2rem; border-bottom: none; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-size: 1.25rem; font-weight: 700; color: #111;">Pause Reason</h3>
+            <button class="close-btn" onclick="closePauseModal()"
+                style="background: none; border: none; font-size: 1.25rem; color: #666; cursor: pointer;"><i
+                    class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" style="padding: 0 2rem 2rem;">
+            <p style="color: #64748B; font-size: 0.9rem; margin-bottom: 1rem;">Please specify why this worker is taking
+                a break.</p>
+            <div style="margin-bottom: 1.5rem;">
+                <label
+                    style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #111; font-size: 0.95rem;">Reason
+                    (Required)</label>
+                <input type="text" id="pause_reason_input" placeholder="e.g. Lunch Break, Meeting, Material Delay"
+                    style="width: 100%; padding: 0.8rem 1rem; border-radius: 10px; border: 1.5px solid #DDD; font-size: 0.95rem; outline: none;">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                <button class="btn" onclick="closePauseModal()"
+                    style="padding: 0.75rem 1.75rem; border-radius: 8px; border: 1.5px solid #DDD; background: white; color: #111; font-weight: 700; cursor: pointer;">Cancel</button>
+                <button class="btn" id="confirmPauseBtn"
+                    style="padding: 0.75rem 1.75rem; border-radius: 8px; border: none; background: #111; color: white; font-weight: 700; cursor: pointer;">Confirm
+                    Pause</button>
+            </div>
+        </div>
+    </div>
+    <div id="modalOverlay" class="overlay" onclick="closeManualEntryModal()" style="z-index: 1000;"></div>
+
+    <script>
+        let currentMO = '';
+        let currentOp = '';
+        let currentProduct = '';
+        let refreshInterval = null;
+
+        const mosData = JSON.parse('{{ mos | tojson | safe }}');
+        const allPendingTasks = JSON.parse('{{ tasks | tojson | safe }}');
+        const employeeMap = JSON.parse('{{ emp_map | tojson | safe }}');
+
+        function openAssign(moName, op) {
+            currentMO = moName;
+            currentOp = op;
+
+            // Find product name
+            const mo = mosData.find(m => m.name === moName);
+            currentProduct = mo ? mo.product_id[1] : 'Unknown Product';
+
+            // Update Header
+            document.getElementById('headerMO').innerText = moName;
+            document.getElementById('headerOp').innerText = op;
+            document.getElementById('headerProduct').innerText = currentProduct;
+
+            // Show Sidebar
+            document.getElementById('assignSidebar').classList.add('show');
+            document.getElementById('assignSidebar').style.right = '0';
+            document.getElementById('overlay').classList.add('active');
+
+            renderAssignedWorkers();
+
+            if (refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(updateTimers, 1000);
+        }
+
+        function closeAssign() {
+            document.getElementById('assignSidebar').classList.remove('show');
+            document.getElementById('assignSidebar').style.right = '-850px';
+            document.getElementById('overlay').classList.remove('active');
+            if (refreshInterval) clearInterval(refreshInterval);
+        }
+
+        function renderAssignedWorkers() {
+            const list = document.getElementById('assignedList');
+            const placeholder = document.getElementById('noWorkersState');
+
+            // Filter tasks for this specific cell
+            const cellTasks = allPendingTasks.filter(t => t.mo_reference === currentMO && t.description === currentOp);
+
+            list.innerHTML = '';
+            document.getElementById('assignedCountLabel').innerText = `ASSIGNED WORKERS (${cellTasks.length})`;
+
+            if (cellTasks.length === 0) {
+                list.appendChild(placeholder);
+                return;
+            }
+
+            cellTasks.forEach(task => {
+                const card = document.createElement('div');
+                card.className = 'worker-card';
+
+                const worker = employeeMap[task.assigned_to_id] || { name: 'Unknown' };
+                const initials = (worker.name || '?').substring(0, 1).toUpperCase();
+
+                // Dynamic Action Buttons Logic
+                let clockBtn = '';
+                let pauseBtn = '';
+
+                if (task.status === 'pending') {
+                    clockBtn = `<button class="action-btn-outline btn-clockin" onclick="performTaskAction('${task.id}', 'start')" style="min-width: 130px;">
+                                    <i class="fa-solid fa-right-to-bracket"></i> Clock In
+                                </button>`;
+                    pauseBtn = `<button class="action-btn-outline" disabled style="min-width: 120px; border-color: #F1F5F9; color: #CBD5E1;">
+                                    <i class="fa-solid fa-pause"></i> Pause
+                                </button>`;
+                } else if (task.status === 'active') {
+                    clockBtn = `<button class="action-btn-outline btn-stop" onclick="performTaskAction('${task.id}', 'complete')" style="min-width: 130px;">
+                                    <i class="fa-solid fa-arrow-right-from-bracket"></i> Clock Out
+                                </button>`;
+                    pauseBtn = `<button class="action-btn-outline btn-pause" onclick="taskAction('${task.id}', 'break')" style="min-width: 120px;">
+                                    <i class="fa-solid fa-pause"></i> Pause
+                                </button>`;
+                } else if (task.status === 'break') {
+                    clockBtn = `<button class="action-btn-outline btn-stop" onclick="performTaskAction('${task.id}', 'complete')" style="min-width: 130px;">
+                                    <i class="fa-solid fa-arrow-right-from-bracket"></i> Clock Out
+                                </button>`;
+                    pauseBtn = `<button class="action-btn-outline btn-clockin" onclick="performTaskAction('${task.id}', 'resume')" style="min-width: 120px; border-color: #10B981; color: #059669;">
+                                    <i class="fa-solid fa-play"></i> Resume
+                                </button>`;
+                }
+
+                card.innerHTML = `
+                    <div class="avatar-lg">${initials}</div>
+                    <div style="flex: 0 0 150px;">
+                        <div style="font-weight: 700; color: #1E293B; font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${worker.name}</div>
+                        <div style="font-size: 0.9rem; color: #64748B; font-weight: 600; margin-top: 2px;">$${task.hourly_rate}/hr</div>
+                    </div>
+                    
+                    <div style="flex: 0 0 110px;">
+                        <span class="status-pill ${task.status === 'active' ? 'pill-running' : 'pill-paused'}">${task.status === 'active' ? 'RUNNING' : (task.status === 'break' ? 'PAUSED' : 'PENDING')}</span>
+                    </div>
+
+                    <div class="timer-badge" style="flex: 1; font-size: 1.3rem; text-align: center; color: #1E293B;" data-start="${task.last_action_time}" data-base="${task.active_seconds}" data-status="${task.status}">00:00:00</div>
+                    
+                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-shrink: 0; margin-left: 1rem;">
+                        ${clockBtn}
+                        ${pauseBtn}
+                        <div style="width: 1px; height: 32px; background: #E2E8F0; margin: 0 0.25rem;"></div>
+                        <button class="trash-btn" onclick="deleteTask('${task.id}')">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+            updateTimers();
+        }
+
+        function updateTimers() {
+            const now = new Date();
+            document.querySelectorAll('.timer-badge').forEach(badge => {
+                const status = badge.dataset.status;
+                let totalSec = parseInt(badge.dataset.base) || 0;
+
+                if (status === 'active') {
+                    // Force UTC parsing to avoid 5-hour jumps
+                    let startStr = badge.dataset.start;
+                    if (startStr && !startStr.includes('Z')) {
+                        startStr += 'Z';
+                    }
+                    const startTime = new Date(startStr);
+                    if (!isNaN(startTime)) {
+                        const diff = Math.floor((now - startTime) / 1000);
+                        if (diff > 0) totalSec += diff;
+                    }
+                }
+
+                const hrs = Math.floor(totalSec / 3600).toString().padStart(2, '0');
+                const mins = Math.floor((totalSec % 3600) / 60).toString().padStart(2, '0');
+                const secs = (totalSec % 60).toString().padStart(2, '0');
+                badge.innerText = `${hrs}:${mins}:${secs}`;
+            });
+        }
+
+        async function assignSingleWorker() {
+            const select = document.getElementById('workerSelect');
+            const empId = select.value;
+            if (!empId) return alert('Select a worker first');
+
+            const option = select.options[select.selectedIndex];
+            const rate = option.dataset.rate;
+
+            try {
+                const res = await fetch('/api/assign_task', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        assignments: [{ employee_id: empId, hourly_rate: rate }],
+                        description: currentOp,
+                        mo_reference: currentMO
+                    })
+                });
+
+                if (res.ok) {
+                    location.reload();
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        let currentActionTaskId = null;
+        async function taskAction(taskId, action) {
+            if (action === 'break') {
+                currentActionTaskId = taskId;
+                openPauseModal();
+                return;
+            }
+
+            performTaskAction(taskId, action);
+        }
+
+        function openPauseModal() {
+            document.getElementById('pause_reason_input').value = 'Break';
+            document.getElementById('pauseModal').classList.add('active');
+            document.getElementById('overlay').classList.add('active');
+        }
+
+        function closePauseModal() {
+            document.getElementById('pauseModal').classList.remove('active');
+            document.getElementById('overlay').classList.remove('active');
+            currentActionTaskId = null;
+        }
+
+        document.getElementById('confirmPauseBtn').onclick = () => {
+            const reason = document.getElementById('pause_reason_input').value;
+            if (!reason) return alert('Reason is required');
+            performTaskAction(currentActionTaskId, 'break', reason);
+            closePauseModal();
+        };
+
+        async function performTaskAction(taskId, action, reason = null) {
+            let body = { action: action };
+            if (reason) body.reason = reason;
+
+            try {
+                const res = await fetch(`/api/task/${taskId}/action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) {
+                    location.reload();
+                } else {
+                    const err = await res.json();
+                    alert('Error: ' + (err.error || 'Failed to perform action'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Connection error. Please try again.');
+            }
+        }
+
+        async function deleteTask(taskId) {
+            if (!confirm('Are you sure you want to remove this task assignment?')) return;
+
+            try {
+                const res = await fetch(`/api/task/${taskId}/cancel`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (res.ok) {
+                    location.reload();
+                } else {
+                    alert('Error removing task');
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        // Manual Entry Logic
+        function openManualEntryModal() {
+            document.getElementById('manualEntryModal').style.opacity = '1';
+            document.getElementById('manualEntryModal').style.pointerEvents = 'all';
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function closeManualEntryModal() {
+            document.getElementById('manualEntryModal').style.opacity = '0';
+            document.getElementById('manualEntryModal').style.pointerEvents = 'none';
+            document.getElementById('modalOverlay').classList.remove('active');
+        }
+
+        async function submitManualEntry() {
+            const mo = document.getElementById('manual_mo').value;
+            const op = document.getElementById('manual_op').value;
+            const worker = document.getElementById('manual_worker').value;
+            const start = document.getElementById('manual_start').value;
+            const end = document.getElementById('manual_end').value;
+
+            if (!mo || !op || !worker || !start || !end) return alert('Please fill all fields');
+
+            try {
+                const res = await fetch('/api/manual_entry', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mo_reference: mo,
+                        operation: op,
+                        employee_id: worker,
+                        start_time: start,
+                        end_time: end
+                    })
+                });
+                if (res.ok) location.reload();
+                else alert('Error submitting entry');
+            } catch (e) { console.error(e); }
+        }
+
+        // Scroll to MO if hash exists
+        window.onload = () => {
+            if (window.location.hash) {
+                const el = document.querySelector(window.location.hash);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth' });
+                    el.style.background = '#FEFCE8';
+                    setTimeout(() => el.style.background = '', 3000);
+                }
+            }
+        };
+
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const mainContent = document.querySelector('.main-content');
+            const toggleIcon = document.querySelector('.sidebar-toggle i');
+
+            sidebar.classList.toggle('collapsed');
+            mainContent.classList.toggle('expanded');
+
+            if (sidebar.classList.contains('collapsed')) {
+                toggleIcon.classList.remove('fa-xmark');
+                toggleIcon.classList.add('fa-bars');
+            } else {
+                toggleIcon.classList.remove('fa-bars');
+                toggleIcon.classList.add('fa-xmark');
+            }
+        }
+    </script>
+</body>
+
+</html>

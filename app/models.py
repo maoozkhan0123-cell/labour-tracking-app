@@ -11,6 +11,15 @@ class User(UserMixin):
         self.name = name
         self.hourly_rate = hourly_rate
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'role': self.role,
+            'name': self.name,
+            'hourly_rate': self.hourly_rate
+        }
+
     @staticmethod
     def get(user_id):
         if not user_id: return None
@@ -33,13 +42,15 @@ class User(UserMixin):
 class Task:
     def __init__(self, id, description, mo_reference, assigned_to_id, status, hourly_rate, 
                  start_time=None, last_action_time=None, end_time=None, 
-                 active_seconds=0, break_seconds=0, total_duration_seconds=0, created_at=None):
+                 active_seconds=0, break_seconds=0, total_duration_seconds=0, created_at=None, **kwargs):
         self.id = id
         self.description = description
         self.mo_reference = mo_reference
         self.assigned_to_id = assigned_to_id
         self.status = status
         self.hourly_rate = hourly_rate
+        self.manual = kwargs.get('manual', False)
+        self.reason = kwargs.get('reason', '')
         
         # Convert Firestore timestamps to Python datetime if necessary
         def to_dt(val):
@@ -53,6 +64,28 @@ class Task:
         self.break_seconds = break_seconds
         self.total_duration_seconds = total_duration_seconds
         self.created_at = created_at
+
+    def to_dict(self):
+        def dt_to_str(dt):
+            return dt.isoformat() if isinstance(dt, datetime) else dt
+
+        return {
+            'id': self.id,
+            'description': self.description,
+            'mo_reference': self.mo_reference,
+            'assigned_to_id': self.assigned_to_id,
+            'status': self.status,
+            'hourly_rate': self.hourly_rate,
+            'start_time': dt_to_str(self.start_time),
+            'last_action_time': dt_to_str(self.last_action_time),
+            'end_time': dt_to_str(self.end_time),
+            'active_seconds': self.active_seconds,
+            'break_seconds': self.break_seconds,
+            'total_duration_seconds': self.total_duration_seconds,
+            'manual': self.manual,
+            'reason': self.reason,
+            'created_at': dt_to_str(self.created_at)
+        }
 
     @property
     def amount_earned(self):

@@ -4,467 +4,211 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manager Dashboard - Babylon Labor</title>
+    <title>Manager Dashboard - WorkTrack</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        .status-dot {
-            height: 10px;
-            width: 10px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 8px;
-        }
-
-        .dot-free {
-            background-color: #10b981;
-        }
-
-        .dot-busy {
-            background-color: #f59e0b;
-        }
-
-        .dot-break {
-            background-color: #ef4444;
-        }
-
-        .stat-card {
-            border: 1px solid var(--babylon-border);
-            padding: 1.2rem;
-            border-radius: 18px;
-            background: white;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.05);
-        }
-
-        .timer-val {
-            font-family: 'monospace';
-            font-weight: 700;
-            color: var(--babylon-navy);
-            font-size: 1.1rem;
-        }
-
-        .timer-label {
-            font-size: 0.6rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .group-assign-list {
-            margin-top: 1rem;
-            max-height: 200px;
-            overflow-y: auto;
-            border: 1px solid var(--babylon-border);
-            padding: 10px;
-            border-radius: 12px;
-            background: #fdfdfd;
-        }
-
-        .emp-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #eee;
-        }
-
-        .emp-row:last-child {
-            border-bottom: none;
-        }
-
-        .employee-details {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease-out;
-            background: #fcfcfc;
-            border-radius: 0 0 18px 18px;
-            margin-top: 0;
-            border: 1px solid transparent;
-        }
-
-        .stat-card.active+.employee-details {
-            max-height: 500px;
-            margin-top: -10px;
-            padding: 20px 1.2rem 1.2rem;
-            border: 1px solid var(--babylon-border);
-            border-top: none;
-        }
-
-        .task-mini-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.75rem;
-            padding: 6px 0;
-            border-bottom: 1px solid #f0f0f0;
-        }
-
-        .task-mini-row:last-child {
-            border-bottom: none;
-        }
-
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(4px);
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-content {
-            background-color: white;
-            padding: 2.5rem;
-            border-radius: 24px;
-            width: 100%;
-            max-width: 450px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-        }
-    </style>
 </head>
 
 <body>
-    {% macro format_seconds(s) -%}
-    {% set hours = (s // 3600) %}
-    {% set minutes = (s % 3600) // 60 %}
-    {% set seconds = s % 60 %}
-    {{ "%02d:%02d:%02d"|format(hours, minutes, seconds) }}
-    {%- endmacro %}
 
-    <header>
-        <h1>BABYLON</h1>
-        <div style="display: flex; gap: 1.5rem; align-items: center;">
-            <button onclick="document.getElementById('hireModal').style.display='flex'"
-                style="background: var(--babylon-navy); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 99px; font-weight: 700; font-size: 0.8rem; cursor: pointer;">
-                <i class="fa-solid fa-user-plus" style="margin-right: 8px;"></i>HIRE NEW EMPLOYEE
-            </button>
-            <span style="font-weight: 600; font-size: 0.9rem;">Admin: {{ current_user.name }}</span>
-            <a href="{{ url_for('main.logout') }}"
-                style="color: var(--babylon-gold); text-decoration: none; font-weight: 800; font-size: 0.8rem; border: 1px solid var(--babylon-gold); padding: 0.4rem 1rem; border-radius: 99px;">LOGOUT</a>
-        </div>
-    </header>
+    <!-- Sidebar Toggle -->
+    <div class="sidebar-toggle" onclick="toggleSidebar()">
+        <i class="fa-solid fa-bars"></i>
+    </div>
 
-    <div class="dashboard">
-        <!-- 1. STAFF AVAILABILITY -->
-        <div class="glass-panel" style="grid-column: 1 / -1;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2
-                    style="font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid var(--babylon-gold); display: inline-block; padding-bottom: 5px; margin: 0;">
-                    Operation Overview</h2>
-                <div style="position: relative; width: 300px;">
-                    <i class="fa-solid fa-magnifying-glass"
-                        style="position: absolute; left: 15px; top: 12px; color: #7f8c8d;"></i>
-                    <input type="text" id="employeeSearch" placeholder="Search employees..."
-                        style="width: 100%; padding: 8px 15px 8px 40px; border-radius: 99px; border: 1px solid var(--babylon-border); font-size: 0.9rem;"
-                        onkeyup="filterEmployees()">
-                </div>
+    <!-- Sidebar -->
+    <nav class="sidebar collapsed">
+        <div class="brand">
+            <div class="brand-icon">
+                <i class="fa-regular fa-clock"></i>
             </div>
-
-            <div id="employeeGrid"
-                style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem;">
-                {% for emp in employees %}
-                {% set stats = person_summary[emp.id] %}
-                <div class="employee-card-wrapper" data-name="{{ emp.name.lower() }}">
-                    <div class="stat-card" onclick="this.classList.toggle('active')"
-                        style="border-top: 4px solid {% if stats.status == 'Free' %}#10b981{% elif stats.status == 'Working' %}#f59e0b{% else %}#ef4444{% endif %};">
-                        <div style="display: flex; justify-content: space-between; align-items: start;">
-                            <div>
-                                <div style="font-weight: 700; font-size: 1rem; color: var(--babylon-navy);">
-                                    <span
-                                        class="status-dot {% if stats.status == 'Free' %}dot-free{% elif stats.status == 'Working' %}dot-busy{% else %}dot-break{% endif %}"></span>
-                                    {{ emp.name }}
-                                </div>
-                                <div style="font-size: 0.8rem; color: #7f8c8d; margin-top: 4px;">{{ stats.status }}
-                                    {% if stats.current_job %} • <span
-                                        style="color: var(--babylon-navy); font-weight: 600;">{{ stats.current_job
-                                        }}</span>{% endif %}
-                                    {% if stats.current_mo %} • <span
-                                        style="color: var(--babylon-gold); font-weight: 700;">{{ stats.current_mo
-                                        }}</span>{% endif %}
-                                </div>
-                            </div>
-                            <i class="fa-solid fa-chevron-down" style="font-size: 0.8rem; opacity: 0.3;"></i>
-                        </div>
-
-                        <div
-                            style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.75rem;">
-                            <span><strong style="color: #059669;">ACTIVE:</strong> {{ format_seconds(stats.active_sec)
-                                }}</span>
-                            <span><strong style="color: #dc2626;">NON-ACTIVE:</strong> {{
-                                format_seconds(stats.break_sec) }}</span>
-                            <span><strong>TOTAL:</strong> {{ format_seconds(stats.total_sec) }}</span>
-                            <span
-                                style="color: var(--babylon-navy); font-weight: 800; font-size: 0.85rem;"><strong>EARNED:</strong>
-                                ${{ "%.2f"|format(stats.total_earned) }}</span>
-                        </div>
-                    </div>
-                    <div class="employee-details">
-                        <h5 style="font-size: 0.7rem; text-transform: uppercase; color: #7f8c8d; margin-bottom: 8px;">
-                            Completed Tasks</h5>
-                        {% set emp_tasks = tasks | selectattr('assigned_to_id', 'equalto', emp.id) | list %}
-                        {% if emp_tasks %}
-                        {% for t in emp_tasks %}
-                        <div class="task-mini-row">
-                            <span>{{ t.description }} ({{ t.mo_reference }})</span>
-                            <span style="font-weight: 700;">${{ "%.2f"|format(t.amount_earned) }}</span>
-                        </div>
-                        {% endfor %}
-                        {% else %}
-                        <div style="font-size: 0.75rem; color: #ccc; text-align: center; padding: 10px;">No tasks
-                            recorded</div>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
+            WorkTrack
         </div>
 
-        <!-- 2. ASSIGNMENT FORM -->
-        <div class="glass-panel" style="grid-column: 1 / 5;">
-            <h2 style="font-size: 1rem; text-transform: uppercase;">Assign Task</h2>
-            <div class="form-group">
-                <label>Target Employees</label>
-                <div class="group-assign-list">
-                    {% for emp in employees %}
-                    <div class="emp-row">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <input type="checkbox" class="emp-checkbox" value="{{ emp.id }}" data-name="{{ emp.name }}"
-                                onchange="toggleRateInput(this)">
-                            <span style="font-size: 0.9rem;">{{ emp.name }}</span>
-                        </div>
-                        <input type="number" step="0.5" placeholder="Rate ($)" class="emp-rate-input"
-                            id="rate-for-{{ emp.id }}"
-                            style="width: 80px; padding: 4px 8px; font-size: 0.8rem; display: none;">
-                    </div>
+        <ul class="nav-menu">
+            <li><a href="{{ url_for('main.manager_dashboard') }}" class="nav-item active">
+                    <i class="fa-solid fa-border-all"></i> Dashboard
+                </a></li>
+            <li><a href="{{ url_for('main.control_matrix') }}" class="nav-item">
+                    <i class="fa-solid fa-table-cells"></i> Control Matrix
+                </a></li>
+            <li><a href="{{ url_for('main.manufacturing_orders') }}" class="nav-item">
+                    <i class="fa-regular fa-clipboard"></i> Manufacturing Orders
+                </a></li>
+            <li><a href="{{ url_for('main.employee_activity') }}" class="nav-item">
+                    <i class="fa-solid fa-users-viewfinder"></i> Employee Activity
+                </a></li>
+            <li><a href="{{ url_for('main.workers') }}" class="nav-item">
+                    <i class="fa-regular fa-user"></i> Workers
+                </a></li>
+            <li><a href="{{ url_for('main.operations') }}" class="nav-item">
+                    <i class="fa-solid fa-list-check"></i> Operations
+                </a></li>
+            <li><a href="{{ url_for('main.reports') }}" class="nav-item">
+                    <i class="fa-solid fa-chart-column"></i> Reports
+                </a></li>
+        </ul>
+
+        <div class="bottom-menu">
+            <ul class="nav-menu">
+                <li><a href="#" class="nav-item">
+                        <i class="fa-solid fa-gear"></i> Settings
+                    </a></li>
+                <li><a href="{{ url_for('main.logout') }}" class="nav-item">
+                        <i class="fa-solid fa-arrow-right-from-bracket"></i> Logout
+                    </a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content expanded">
+        <div class="page-header">
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-subtitle">Manufacturing labor overview</p>
+        </div>
+
+        <!-- Calculations -->
+        {% set active_workers = namespace(count=0) %}
+        {% set running_timers = namespace(count=0) %}
+        {% set total_sec = namespace(value=0) %}
+        {% set total_cost = namespace(value=0) %}
+
+        {% for emp in employees %}
+        {% set stats = person_summary[emp.id] %}
+        {% if stats.status == 'Working' %}
+        {% set active_workers.count = active_workers.count + 1 %}
+        {% endif %}
+        {% set total_sec.value = total_sec.value + stats.active_sec %}
+        {% set total_cost.value = total_cost.value + stats.total_earned %}
+        {% endfor %}
+
+        {% for t in tasks %}
+        {% if t.status == 'active' %}
+        {% set running_timers.count = running_timers.count + 1 %}
+        {% endif %}
+        {% endfor %}
+
+        <!-- Top Stats Cards -->
+        <div class="stats-grid">
+            <!-- Card 1 -->
+            <a href="{{ url_for('main.employee_activity') }}" class="stat-card"
+                style="text-decoration: none; color: inherit;">
+                <div>
+                    <div class="stat-label">Active Workers</div>
+                    <div class="stat-value">{{ active_workers.count }}</div>
+                    <div class="stat-detail">{{ employees|length }} total workers</div>
+                </div>
+                <div class="icon-box icon-blue">
+                    <i class="fa-solid fa-user-group"></i>
+                </div>
+            </a>
+
+            <!-- Card 2 -->
+            <a href="{{ url_for('main.control_matrix') }}" class="stat-card"
+                style="text-decoration: none; color: inherit;">
+                <div>
+                    <div class="stat-label">Running Timers</div>
+                    <div class="stat-value">{{ running_timers.count }}</div>
+                    <div class="stat-detail">Currently active</div>
+                </div>
+                <div class="icon-box icon-green">
+                    <i class="fa-regular fa-circle-play"></i>
+                </div>
+            </a>
+
+            <!-- Card 3 -->
+            <a href="{{ url_for('main.reports') }}" class="stat-card" style="text-decoration: none; color: inherit;">
+                <div>
+                    <div class="stat-label">Today's Hours</div>
+                    <div class="stat-value">{{ "%.1f"|format(total_sec.value / 3600) }}</div>
+                    <div class="stat-detail">Hours logged</div>
+                </div>
+                <div class="icon-box icon-yellow">
+                    <i class="fa-regular fa-clock"></i>
+                </div>
+            </a>
+
+            <!-- Card 4 -->
+            <div class="stat-card">
+                <div>
+                    <div class="stat-label">Today's Labor Cost</div>
+                    <div class="stat-value">${{ "%.2f"|format(total_cost.value) }}</div>
+                    <div class="stat-detail">Calculated from entries</div>
+                </div>
+                <div class="icon-box icon-red">
+                    <i class="fa-solid fa-dollar-sign"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Lists -->
+        <div class="content-grid" style="grid-template-columns: 1fr; gap: 1.5rem;">
+
+            <!-- Active Orders (Full Width now) -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h2 class="section-title">Active Orders</h2>
+                    <a href="{{ url_for('main.manufacturing_orders') }}" class="view-link">View All <i
+                            class="fa-solid fa-arrow-right"></i></a>
+                </div>
+
+                <div class="list-container">
+                    {% set active_mos = [] %}
+                    {% for t in tasks %}
+                    {% if t.status == 'active' and t.mo_reference not in active_mos %}
+                    {% set _ = active_mos.append(t.mo_reference) %}
+                    {% endif %}
                     {% endfor %}
-                </div>
-            </div>
-            <div class="form-group" style="margin-top: 1rem;">
-                <label>Operation</label>
-                <select id="task-desc"
-                    style="width: 100%; border: 1px solid var(--babylon-border); border-radius: 99px; padding: 10px 15px; font-size: 0.9rem;">
-                    <option value="" disabled selected>Select Operation...</option>
-                    <option value="Receiving">Receiving</option>
-                    <option value="Staging">Staging</option>
-                    <option value="Batching">Batching</option>
-                    <option value="Weighing">Weighing</option>
-                    <option value="Filling">Filling</option>
-                    <option value="Shipping">Shipping</option>
-                    <option value="Cleaning">Cleaning</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>MO Reference (From Odoo)</label>
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="mo-ref" placeholder="Search MO..." style="flex: 1;">
-                    <button class="btn btn-secondary" style="padding: 0 15px; border-radius: 99px; font-size: 0.7rem;"
-                        onclick="fetchOdooMOs()">FETCH</button>
-                </div>
-            </div>
-            <button class="btn btn-primary" onclick="assignTask()">ASSIGN TASK</button>
-        </div>
 
-        <!-- 3. DETAILED LOG -->
-        <div class="glass-panel" style="grid-column: 5 / -1;">
-            <h2 style="font-size: 1rem; text-transform: uppercase;">Task Activity Log</h2>
-            <div style="display: grid; grid-template-columns: 1fr; gap: 0.8rem;">
-                {% for task in tasks if task.status != 'cancelled' %}
-                <div class="mo-card {{ task.status }}"
-                    style="padding: 1rem 1.5rem; border-radius: 12px; position: relative;" data-id="{{ task.id }}"
-                    data-status="{{ task.status }}" {% if task.status=='active' and task.last_action_time %}
-                    data-last-action="{{ task.last_action_time.isoformat() }}"
-                    data-base-seconds="{{ task.active_seconds }}" {% elif task.status=='break' and task.last_action_time
-                    %} data-last-break-start="{{ task.last_action_time.isoformat() }}"
-                    data-base-break-seconds="{{ task.break_seconds }}" {% endif %}>
-
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div style="flex: 1;">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                                <span class="status-badge" style="margin-bottom: 0;">{{ task.status }}</span>
-                                {% if task.status == 'pending' %}
-                                <button onclick="cancelTask('{{ task.id }}')"
-                                    style="border: none; background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 6px; font-size: 0.6rem; font-weight: 800; cursor: pointer;">
-                                    <i class="fa-solid fa-xmark"></i> CANCEL
-                                </button>
-                                {% endif %}
-                            </div>
-                            <h4 style="color: var(--babylon-navy); margin:0.2rem 0; font-size: 0.95rem;">{{
-                                task.description }}</h4>
-                            <div class="mo-detail" style="font-size: 0.75rem;"><strong>{{ task.assigned_to.name
-                                    }}</strong> • Ref: {{ task.mo_reference }} • ${{ "%.2f"|format(task.hourly_rate)
-                                }}/hr</div>
-                        </div>
-
-                        <div style="display: flex; gap: 1.5rem; align-items: center; text-align: right;">
-                            <div style="width: 85px;">
-                                <div class="timer-label" style="color: #059669;">Active</div>
-                                <div class="timer-val active-time" style="font-size: 1rem;">{{
-                                    format_seconds(task.active_seconds) }}</div>
-                            </div>
-                            <div style="width: 85px;">
-                                <div class="timer-label" style="color: #dc2626;">Non-Active</div>
-                                <div class="timer-val break-time" style="font-size: 1rem;">{{
-                                    format_seconds(task.break_seconds) }}</div>
-                            </div>
+                    {% if active_mos %}
+                    {% for mo in active_mos %}
+                    <a href="{{ url_for('main.control_matrix') }}" class="list-item"
+                        style="text-decoration: none; color: inherit;">
+                        <div class="item-main">
                             <div
-                                style="width: 100px; border-left: 1px solid #eee; padding-left: 1.5rem; margin-left: 0.5rem;">
-                                <div class="timer-label" style="color: var(--babylon-navy);">Earnings</div>
-                                <div class="timer-val task-earned"
-                                    style="font-size: 1.1rem; color: var(--babylon-gold);"
-                                    data-rate="{{ task.hourly_rate }}">
-                                    ${{ "%.2f"|format(task.amount_earned) }}
-                                </div>
+                                style="width:40px; height:40px; background:#EEF2FF; color:var(--primary); display:flex; align-items:center; justify-content:center; border-radius:8px; font-weight:700; font-size:0.8rem;">
+                                MO
+                            </div>
+                            <div>
+                                <div class="item-title">{{ mo }}</div>
+                                <div class="item-sub">In Progress</div>
                             </div>
                         </div>
-                    </div>
+                        <!-- Counts how many tasks are active for this MO -->
+                        {% set count = namespace(val=0) %}
+                        {% for t in tasks %}
+                        {% if t.status == 'active' and t.mo_reference == mo %}
+                        {% set count.val = count.val + 1 %}
+                        {% endif %}
+                        {% endfor %}
+                        <span class="status-badge badge-blue">{{ count.val }} active operations</span>
+                    </a>
+                    {% endfor %}
+                    {% else %}
+                    <div style="text-align:center; color:#9ca3af; padding:1rem;">No active orders</div>
+                    {% endif %}
                 </div>
-                {% endfor %}
             </div>
         </div>
-    </div>
 
-    <!-- Modals (Hire Modal) -->
-    <div id="hireModal" class="modal">
-        <div class="modal-content">
-            <h2 style="text-transform: uppercase; margin-bottom: 1.5rem; color: var(--babylon-navy);">Hire New Employee
-            </h2>
-            <div class="form-group"><label>Full Name</label><input type="text" id="hire-name" placeholder="John Doe">
-            </div>
-            <div class="form-group"><label>Username</label><input type="text" id="hire-username"
-                    placeholder="johndoe123"></div>
-            <div class="form-group"><label>Initial Password</label><input type="text" id="hire-password"
-                    placeholder="Pass123!"></div>
-            <div class="form-group"><label>Hourly Rate ($)</label><input type="number" id="hire-rate" step="0.5"
-                    placeholder="15.00"></div>
-            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-                <button class="btn btn-primary" onclick="hireEmployee()" style="flex: 2;">CONFIRM HIRING</button>
-                <button class="btn btn-danger" onclick="document.getElementById('hireModal').style.display='none'"
-                    style="flex: 1;">CANCEL</button>
-            </div>
-        </div>
-    </div>
-
+    </main>
     <script>
-        function filterEmployees() {
-            const query = document.getElementById('employeeSearch').value.toLowerCase();
-            document.querySelectorAll('.employee-card-wrapper').forEach(card => {
-                const name = card.dataset.name;
-                card.style.display = name.includes(query) ? 'block' : 'none';
-            });
-        }
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const mainContent = document.querySelector('.main-content');
+            const toggleIcon = document.querySelector('.sidebar-toggle i');
 
-        async function cancelTask(taskId) {
-            if (!confirm("Are you sure you want to cancel this task?")) return;
-            const res = await fetch(`/api/task/${taskId}/cancel`, { method: 'POST' });
-            if (res.ok) location.reload();
-        }
+            sidebar.classList.toggle('collapsed');
+            mainContent.classList.toggle('expanded');
 
-        function toggleRateInput(checkbox) {
-            const rateInput = document.getElementById('rate-for-' + checkbox.value);
-            rateInput.style.display = checkbox.checked ? 'block' : 'none';
-        }
-
-        function format_hhmmss(s) {
-            const h = Math.floor(s / 3600);
-            const m = Math.floor((s % 3600) / 60);
-            const sec = s % 60;
-            return [h, m, sec].map(v => v.toString().padStart(2, '0')).join(':');
-        }
-
-        function updateLiveTimers() {
-            document.querySelectorAll('.mo-card[data-status="active"]').forEach(card => {
-                const lastAction = new Date(card.dataset.lastAction + 'Z');
-                const baseSeconds = parseInt(card.dataset.baseSeconds || 0);
-                const elapsed = Math.floor((new Date() - lastAction) / 1000);
-                const totalActive = baseSeconds + elapsed;
-                const activeDisplay = card.querySelector('.active-time');
-                if (activeDisplay) activeDisplay.innerText = format_hhmmss(totalActive);
-                const earnedDisplay = card.querySelector('.task-earned');
-                if (earnedDisplay) {
-                    const rate = parseFloat(earnedDisplay.dataset.rate);
-                    earnedDisplay.innerText = '$' + ((totalActive / 3600) * rate).toFixed(2);
-                }
-            });
-            document.querySelectorAll('.mo-card[data-status="break"]').forEach(card => {
-                const breakStart = new Date(card.dataset.lastBreakStart + 'Z');
-                const baseBreakSec = parseInt(card.dataset.baseBreakSeconds || 0);
-                const elapsed = Math.floor((new Date() - breakStart) / 1000);
-                const breakDisplay = card.querySelector('.break-time');
-                if (breakDisplay) breakDisplay.innerText = format_hhmmss(baseBreakSec + elapsed);
-            });
-        }
-        setInterval(updateLiveTimers, 1000);
-
-        async function assignTask() {
-            const assignments = [];
-            document.querySelectorAll('.emp-checkbox:checked').forEach(cb => {
-                assignments.push({
-                    employee_id: cb.value,
-                    hourly_rate: document.getElementById('rate-for-' + cb.value).value
-                });
-            });
-            const description = document.getElementById('task-desc').value;
-            const mo_reference = document.getElementById('mo-ref').value;
-            if (assignments.length === 0) return alert("Select at least one employee.");
-            if (!description) return alert("Select an operation.");
-            const res = await fetch('/api/assign_task', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ assignments, description, mo_reference })
-            });
-            if (res.ok) location.reload();
-        }
-
-        async function hireEmployee() {
-            const data = {
-                name: document.getElementById('hire-name').value,
-                username: document.getElementById('hire-username').value,
-                password: document.getElementById('hire-password').value,
-                hourly_rate: document.getElementById('hire-rate').value
-            };
-            const res = await fetch('/api/hire_employee', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            if (res.ok) location.reload();
-        }
-
-        async function fetchOdooMOs() {
-            const query = document.getElementById('mo-ref').value;
-            const btn = event.target;
-            btn.innerText = "FETCHING...";
-
-            try {
-                const res = await fetch(`/api/get_odoo_mos?search=${query}`);
-                const data = await res.json();
-
-                if (data.error) {
-                    alert("Odoo Error: " + data.error);
-                } else if (data.length === 0) {
-                    alert("No matching MOs found. (Search is broad, checking for Confirmed/Planned/Progress/To Close)");
-                } else {
-                    const firstMO = data[0];
-                    document.getElementById('mo-ref').value = firstMO.name;
-                    alert(`Selected: ${firstMO.name} (${firstMO.state})\nProduct: ${firstMO.product_id[1]}`);
-                }
-            } catch (e) {
-                alert("Could not connect to Odoo API. Check credentials.");
-            } finally {
-                btn.innerText = "FETCH";
+            if (sidebar.classList.contains('collapsed')) {
+                toggleIcon.classList.remove('fa-xmark');
+                toggleIcon.classList.add('fa-bars');
+            } else {
+                toggleIcon.classList.remove('fa-bars');
+                toggleIcon.classList.add('fa-xmark');
             }
         }
     </script>

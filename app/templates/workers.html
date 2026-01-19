@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workers - WorkTrack</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* The switch - the box around the slider */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        /* Hide default HTML checkbox */
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        /* The slider */
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            -webkit-transition: .4s;
+            transition: .4s;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            -webkit-transition: .4s;
+            transition: .4s;
+        }
+
+        input:checked+.slider {
+            background-color: #111;
+        }
+
+        input:focus+.slider {
+            box-shadow: 0 0 1px #111;
+        }
+
+        input:checked+.slider:before {
+            -webkit-transform: translateX(20px);
+            -ms-transform: translateX(20px);
+            transform: translateX(20px);
+        }
+
+        /* Rounded sliders */
+        .slider.round {
+            border-radius: 24px;
+        }
+
+        .slider.round:before {
+            border-radius: 50%;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Sidebar Toggle -->
+    <div class="sidebar-toggle" onclick="toggleSidebar()">
+        <i class="fa-solid fa-bars"></i>
+    </div>
+
+    <!-- Sidebar -->
+    <nav class="sidebar collapsed">
+        <div class="brand">
+            <div class="brand-icon">
+                <i class="fa-regular fa-clock"></i>
+            </div>
+            WorkTrack
+        </div>
+        <ul class="nav-menu">
+            <li><a href="{{ url_for('main.manager_dashboard') }}" class="nav-item">
+                    <i class="fa-solid fa-border-all"></i> Dashboard
+                </a></li>
+            <li><a href="{{ url_for('main.control_matrix') }}" class="nav-item">
+                    <i class="fa-solid fa-table-cells"></i> Control Matrix
+                </a></li>
+            <li><a href="{{ url_for('main.manufacturing_orders') }}" class="nav-item">
+                    <i class="fa-regular fa-clipboard"></i> Manufacturing Orders
+                </a></li>
+            <li><a href="{{ url_for('main.employee_activity') }}" class="nav-item">
+                    <i class="fa-solid fa-users-viewfinder"></i> Employee Activity
+                </a></li>
+            <li><a href="{{ url_for('main.workers') }}" class="nav-item active">
+                    <i class="fa-regular fa-user"></i> Workers
+                </a></li>
+            <li><a href="{{ url_for('main.operations') }}" class="nav-item">
+                    <i class="fa-solid fa-list-check"></i> Operations
+                </a></li>
+            <li><a href="{{ url_for('main.reports') }}" class="nav-item">
+                    <i class="fa-solid fa-chart-column"></i> Reports
+                </a></li>
+        </ul>
+        <div class="bottom-menu">
+            <ul class="nav-menu">
+                <li><a href="{{ url_for('main.logout') }}" class="nav-item"><i
+                            class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content expanded">
+        <div class="page-header"
+            style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom: 2rem;">
+            <div>
+                <h1 class="page-title">Workers</h1>
+                <p class="page-subtitle">Manage manufacturing workers</p>
+            </div>
+            <button class="btn btn-primary" onclick="openHireModal()"
+                style="width: auto; padding: 0.75rem 1.5rem; background: #000; color: #fff; border: none; border-radius: 8px; font-weight: 600;">
+                <i class="fa-solid fa-plus"></i> Add Worker
+            </button>
+        </div>
+
+        <div style="margin-bottom: 2rem;">
+            <div style="position: relative; width: 100%; max-width: 400px;">
+                <i class="fa-solid fa-magnifying-glass"
+                    style="position: absolute; left: 15px; top: 12px; color: #9CA3AF;"></i>
+                <input type="text" placeholder="Search workers..."
+                    style="width: 100%; padding: 0.7rem 1rem 0.7rem 2.5rem; border-radius: 8px; border: 1px solid var(--border);">
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Username/Email</th>
+                        <th>Hourly Rate</th>
+                        <th>Status</th>
+                        <th style="text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for worker in workers %}
+                    <tr>
+                        <td>
+                            <div class="user-cell">
+                                <div class="avatar-circle">
+                                    {{ worker.name[0] }}
+                                </div>
+                                <a href="{{ url_for('main.employee_activity') }}"
+                                    style="font-weight: 600; text-decoration: none; color: inherit; cursor: pointer;">{{
+                                    worker.name }}</a>
+                            </div>
+                        </td>
+                        <td style="color: var(--text-muted);">{{ worker.username }}@worktrack.com</td>
+                        <td style="color: var(--text-muted); font-weight: 500;">$ {{ "%.2f"|format(worker.hourly_rate)
+                            }}/hr</td>
+                        <td><span class="badge badge-active">Active</span></td>
+                        <td style="text-align: right;">
+                            <button class="icon-btn" title="Edit"
+                                onclick="openRateModal('{{ worker.id }}', '{{ worker.hourly_rate }}', '{{ worker.name }}', '{{ worker.username }}@worktrack.com')"><i
+                                    class="fa-solid fa-pen"></i></button>
+                            <button class="icon-btn delete" title="Delete" onclick="deleteWorker('{{ worker.id }}')"><i
+                                    class="fa-regular fa-trash-can"></i></button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    <!-- If no workers found -->
+                    {% if not workers %}
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: var(--text-muted);">No workers found.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Add Worker Modal -->
+    <div id="hireModal" class="custom-modal"
+        style="width: 450px; padding: 0; border-radius: 16px; overflow: hidden; background: white;">
+        <div class="modal-header"
+            style="padding: 1.5rem 2rem; border-bottom: none; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-size: 1.25rem; font-weight: 700; color: #111;">Add Worker</h3>
+            <button class="close-btn" onclick="closeHireModal()"
+                style="background: none; border: none; font-size: 1.25rem; color: #666; cursor: pointer;"><i
+                    class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" style="padding: 0 2rem 2rem;">
+            <div style="margin-bottom: 1.25rem;">
+                <label
+                    style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #111; font-size: 0.95rem;">Full
+                    Name</label>
+                <input type="text" id="hire_name" placeholder="Enter worker name"
+                    style="width: 100%; padding: 0.8rem 1rem; border-radius: 10px; border: 1.5px solid #DDD; font-size: 0.95rem; outline: none; transition: border-color 0.2s;">
+            </div>
+            <div style="margin-bottom: 1.25rem;">
+                <label
+                    style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #111; font-size: 0.95rem;">Email</label>
+                <input type="email" id="hire_username" placeholder="worker@company.com"
+                    style="width: 100%; padding: 0.8rem 1rem; border-radius: 10px; border: 1.5px solid #DDD; font-size: 0.95rem; outline: none;">
+            </div>
+            <div style="margin-bottom: 1.5rem;">
+                <label
+                    style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #111; font-size: 0.95rem;">Hourly
+                    Rate ($)</label>
+                <input type="number" id="hire_rate" placeholder="0.00"
+                    style="width: 100%; padding: 0.8rem 1rem; border-radius: 10px; border: 1.5px solid #DDD; font-size: 0.95rem; outline: none;">
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <label style="font-weight: 600; color: #111; font-size: 0.95rem;">Active Status</label>
+                <label class="switch">
+                    <input type="checkbox" id="hire_active" checked>
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                <button class="btn" onclick="closeHireModal()"
+                    style="padding: 0.75rem 1.75rem; border-radius: 8px; border: 1.5px solid #DDD; background: white; color: #111; font-weight: 700; cursor: pointer;">Cancel</button>
+                <button class="btn" onclick="hireWorker()"
+                    style="padding: 0.75rem 1.75rem; border-radius: 8px; border: none; background: #111; color: white; font-weight: 700; cursor: pointer;">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Worker Modal -->
+    <div id="rateModal" class="custom-modal"
+        style="width: 450px; padding: 0; border-radius: 16px; overflow: hidden; background: white;">
+        <div class="modal-header"
+            style="padding: 1.5rem 2rem; border-bottom: none; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-size: 1.25rem; font-weight: 700; color: #111;">Edit Worker</h3>
+            <button class="close-btn" onclick="closeRateModal()"
+                style="background: none; border: none; font-size: 1.25rem; color: #666; cursor: pointer;"><i
+                    class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" style="padding: 0 2rem 2rem;">
+            <input type="hidden" id="rate_worker_id">
+            <div style="margin-bottom: 1.25rem;">
+                <label
+                    style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #111; font-size: 0.95rem;">Full
+                    Name</label>
+                <input type="text" id="edit_name" placeholder="Full Name"
+                    style="width: 100%; padding: 0.8rem 1rem; border-radius: 10px; border: 1.5px solid #DDD; font-size: 0.95rem;">
+            </div>
+            <div style="margin-bottom: 1.25rem;">
+                <label
+                    style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #111; font-size: 0.95rem;">Email</label>
+                <input type="email" id="edit_email" placeholder="Email"
+                    style="width: 100%; padding: 0.8rem 1rem; border-radius: 10px; border: 1.5px solid #DDD; font-size: 0.95rem;">
+            </div>
+            <div style="margin-bottom: 1.5rem;">
+                <label
+                    style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #111; font-size: 0.95rem;">Hourly
+                    Rate ($)</label>
+                <input type="number" id="new_rate" placeholder="0"
+                    style="width: 100%; padding: 0.8rem 1rem; border-radius: 10px; border: 1.5px solid #DDD; font-size: 0.95rem;">
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <label style="font-weight: 600; color: #111; font-size: 0.95rem;">Active Status</label>
+                <label class="switch">
+                    <input type="checkbox" id="edit_active" checked>
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                <button class="btn" onclick="closeRateModal()"
+                    style="padding: 0.75rem 1.75rem; border-radius: 8px; border: 1.5px solid #DDD; background: white; color: #111; font-weight: 700; cursor: pointer;">Cancel</button>
+                <button class="btn" onclick="updateRate()"
+                    style="padding: 0.75rem 1.75rem; border-radius: 8px; border: none; background: #111; color: white; font-weight: 700; cursor: pointer;">Update</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Worker Confirmation Modal -->
+    <div id="deleteWorkerModal" class="custom-modal">
+        <div class="modal-header">
+            <h3>Fire/Remove Worker</h3>
+        </div>
+        <div class="modal-body">
+            Are you sure you want to remove this worker from the system? This will delete their account permanently.
+        </div>
+        <div class="modal-footer"
+            style="padding: 1.5rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 0.75rem;">
+            <button class="btn btn-secondary" onclick="closeDeleteWorkerModal()">Cancel</button>
+            <button class="btn btn-danger" id="confirmDeleteWorkerBtn">Remove Worker</button>
+        </div>
+    </div>
+
+    <div id="modalOverlay" class="overlay" onclick="closeAllModals()" style="z-index: 1000;"></div>
+
+    <script>
+        function openHireModal() {
+            document.getElementById('hireModal').style.opacity = '1';
+            document.getElementById('hireModal').style.pointerEvents = 'all';
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function closeHireModal() {
+            document.getElementById('hireModal').style.opacity = '0';
+            document.getElementById('hireModal').style.pointerEvents = 'none';
+            document.getElementById('modalOverlay').classList.remove('active');
+        }
+
+        function openRateModal(id, rate, name, email) {
+            document.getElementById('rate_worker_id').value = id;
+            document.getElementById('new_rate').value = rate;
+            document.getElementById('edit_name').value = name || '';
+            document.getElementById('edit_email').value = email || '';
+            document.getElementById('rateModal').style.opacity = '1';
+            document.getElementById('rateModal').style.pointerEvents = 'all';
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function closeRateModal() {
+            document.getElementById('rateModal').style.opacity = '0';
+            document.getElementById('rateModal').style.pointerEvents = 'none';
+            document.getElementById('modalOverlay').classList.remove('active');
+        }
+
+        function closeAllModals() {
+            closeHireModal();
+            closeRateModal();
+            closeDeleteWorkerModal();
+        }
+
+        let workerToDelete = null;
+        function deleteWorker(id) {
+            workerToDelete = id;
+            document.getElementById('deleteWorkerModal').style.opacity = '1';
+            document.getElementById('deleteWorkerModal').style.pointerEvents = 'all';
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function closeDeleteWorkerModal() {
+            document.getElementById('deleteWorkerModal').style.opacity = '0';
+            document.getElementById('deleteWorkerModal').style.pointerEvents = 'none';
+            document.getElementById('modalOverlay').classList.remove('active');
+            workerToDelete = null;
+        }
+
+        document.getElementById('confirmDeleteWorkerBtn').onclick = async () => {
+            if (!workerToDelete) return;
+            try {
+                const res = await fetch('/api/delete_employee', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ employee_id: workerToDelete })
+                });
+                if (res.ok) location.reload();
+            } catch (e) { console.error(e); }
+        };
+
+        async function hireWorker() {
+            const name = document.getElementById('hire_name').value;
+            const username = document.getElementById('hire_username').value;
+            const rate = document.getElementById('hire_rate').value;
+            const password = document.getElementById('hire_password').value;
+
+            if (!name || !username || !rate) return alert('Please fill all fields');
+
+            try {
+                const res = await fetch('/api/hire_employee', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, username, hourly_rate: rate, password })
+                });
+                if (res.ok) location.reload();
+                else {
+                    const data = await res.json();
+                    alert(data.error || 'Failed to hire worker');
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        async function updateRate() {
+            const id = document.getElementById('rate_worker_id').value;
+            const rate = document.getElementById('new_rate').value;
+
+            try {
+                const res = await fetch('/api/update_employee_rate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ employee_id: id, hourly_rate: rate })
+                });
+                if (res.ok) location.reload();
+            } catch (e) { console.error(e); }
+        }
+    </script>
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const mainContent = document.querySelector('.main-content');
+            const toggleIcon = document.querySelector('.sidebar-toggle i');
+
+            sidebar.classList.toggle('collapsed');
+            mainContent.classList.toggle('expanded');
+
+            if (sidebar.classList.contains('collapsed')) {
+                toggleIcon.classList.remove('fa-xmark');
+                toggleIcon.classList.add('fa-bars');
+            } else {
+                toggleIcon.classList.remove('fa-bars');
+                toggleIcon.classList.add('fa-xmark');
+            }
+        }
+    </script>
+</body>
+
+</html>
