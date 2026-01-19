@@ -8,6 +8,30 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .dot-active {
+            background-color: var(--success);
+        }
+
+        .dot-completed {
+            background-color: var(--primary);
+        }
+
+        .dot-pending {
+            background-color: #FEF3C7;
+        }
+
+        .dot-break {
+            background-color: #F59E0B;
+        }
+    </style>
 </head>
 
 <body>
@@ -153,9 +177,7 @@
                             <div
                                 style="background: white; border: 1px solid #f1f5f9; border-radius: 8px; padding: 0.75rem; display: flex; justify-content: space-between; align-items: center;">
                                 <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                    <div
-                                        style="width: 8px; height: 8px; border-radius: 50%; background: {{ 'var(--success)' if task.status == 'active' else 'var(--primary)' if task.status == 'completed' else '#FEF3C7' }}">
-                                    </div>
+                                    <div class="status-dot dot-{{ task.status }}"></div>
                                     <div>
                                         <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-main);">{{
                                             task.description }}</div>

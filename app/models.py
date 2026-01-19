@@ -2,6 +2,7 @@ from flask_login import UserMixin
 from datetime import datetime
 from firebase_admin import firestore
 
+
 class User(UserMixin):
     def __init__(self, id, username, password, role, name, hourly_rate):
         self.id = id
@@ -22,7 +23,8 @@ class User(UserMixin):
 
     @staticmethod
     def get(user_id):
-        if not user_id: return None
+        if not user_id:
+            return None
         db = firestore.client()
         user_doc = db.collection('users').document(str(user_id)).get()
         if user_doc.exists:
@@ -52,9 +54,13 @@ class Task:
         self.manual = kwargs.get('manual', False)
         self.reason = kwargs.get('reason', '')
         
-        # Convert Firestore timestamps to Python datetime if necessary
+        # Helper to convert Firestore timestamps to naive UTC datetimes
         def to_dt(val):
-            if val and hasattr(val, 'replace'): return val.replace(tzinfo=None)
+            if val and hasattr(val, 'to_datetime'):
+                return val.to_datetime().replace(tzinfo=None)
+            if isinstance(val, str):
+                try: return datetime.fromisoformat(val.replace('Z', ''))
+                except: return val
             return val
 
         self.start_time = to_dt(start_time)
@@ -63,7 +69,7 @@ class Task:
         self.active_seconds = active_seconds
         self.break_seconds = break_seconds
         self.total_duration_seconds = total_duration_seconds
-        self.created_at = created_at
+        self.created_at = to_dt(created_at)
 
     def to_dict(self):
         def dt_to_str(dt):
@@ -91,35 +97,21 @@ class Task:
     def amount_earned(self):
         return (self.active_seconds / 3600.0) * self.hourly_rate
 
-    @property
-    def assigned_to(self):
-        return User.get(self.assigned_to_id)
-
     @staticmethod
     def get_all():
         db = firestore.client()
         tasks_stream = db.collection('tasks').order_by('created_at', direction=firestore.Query.DESCENDING).stream()
-        tasks = []
-        for doc in tasks_stream:
-            data = doc.to_dict()
-            tasks.append(Task(id=doc.id, **data))
-        return tasks
+        return [Task(id=doc.id, **doc.to_dict()) for doc in tasks_stream]
 
     @staticmethod
     def get_by_employee(emp_id):
         db = firestore.client()
         tasks_stream = db.collection('tasks').where('assigned_to_id', '==', str(emp_id)).stream()
-        tasks = []
-        for doc in tasks_stream:
-            data = doc.to_dict()
-            tasks.append(Task(id=doc.id, **data))
-        
-        # Sort by creation time manually if composite index isn't ready
+        tasks = [Task(id=doc.id, **doc.to_dict()) for doc in tasks_stream]
         return sorted(tasks, key=lambda x: x.created_at if x.created_at else datetime.min, reverse=True)
 
     def save(self):
         db = firestore.client()
-        data = self.__dict__.copy()
-        if 'id' in data:
-            del data['id']
-        db.collection('tasks').document(self.id).set(data)
+        data = self.to_dict()
+        task_id = data.pop('id', self.id)
+        db.collection('tasks').document(task_id).set(data)

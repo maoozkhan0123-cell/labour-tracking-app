@@ -3,10 +3,63 @@ from flask_login import login_user, logout_user, login_required, current_user
 from .models import User, Task
 from datetime import datetime
 from firebase_admin import firestore
-from .odoo_utils import odoo
 import uuid
 
 main_bp = Blueprint('main', __name__)
+
+def get_person_summary(employees, tasks):
+    person_summary = {}
+    now = datetime.utcnow()
+    
+    for emp in employees:
+        emp_tasks = [t for t in tasks if t.assigned_to_id == emp.id]
+        active_sec = sum(t.active_seconds for t in emp_tasks)
+        break_sec = sum(t.break_seconds for t in emp_tasks)
+        
+        # Check current status in Firestore
+        current_status_task = next((t for t in tasks if t.assigned_to_id == emp.id and t.status == 'active'), None)
+        break_status_task = next((t for t in tasks if t.assigned_to_id == emp.id and t.status == 'break'), None)
+        
+        # Live calculations for active/break time
+        current_active = active_sec
+        current_break = break_sec
+        
+        status = 'Free'
+        current_job = ""
+        current_mo = ""
+        
+        if current_status_task:
+            status = 'Working'
+            current_job = current_status_task.description
+            current_mo = current_status_task.mo_reference
+            last_act = current_status_task.last_action_time
+            if last_act:
+                if not isinstance(last_act, datetime):
+                    last_act = last_act.replace(tzinfo=None)
+                diff = (now - last_act).total_seconds()
+                current_active += int(max(0, diff))
+        elif break_status_task:
+            status = 'On Break'
+            current_job = break_status_task.description
+            current_mo = break_status_task.mo_reference
+            last_act = break_status_task.last_action_time
+            if last_act:
+                if not isinstance(last_act, datetime):
+                    last_act = last_act.replace(tzinfo=None)
+                diff = (now - last_act).total_seconds()
+                current_break += int(max(0, diff))
+
+        person_summary[emp.id] = {
+            'active_sec': current_active,
+            'break_sec': current_break,
+            'total_sec': current_active + current_break,
+            'total_earned': sum(t.active_seconds / 3600.0 * t.hourly_rate for t in emp_tasks) + \
+                           ((current_active - active_sec) / 3600.0 * (current_status_task.hourly_rate if current_status_task else 0)),
+            'status': status,
+            'current_job': current_job,
+            'current_mo': current_mo
+        }
+    return person_summary
 
 @main_bp.route('/')
 def index():
@@ -44,65 +97,11 @@ def manager_dashboard():
         return redirect(url_for('main.index'))
     
     db = firestore.client()
-    # Get all employees
     employees_stream = db.collection('users').where('role', '==', 'employee').stream()
-    employees = []
-    for doc in employees_stream:
-        data = doc.to_dict()
-        employees.append(User(id=doc.id, **data))
-        
+    employees = [User(id=doc.id, **doc.to_dict()) for doc in employees_stream]
     tasks = Task.get_all()
     
-    person_summary = {}
-    for emp in employees:
-        emp_tasks = [t for t in tasks if t.assigned_to_id == emp.id]
-        active_sec = sum(t.active_seconds for t in emp_tasks)
-        break_sec = sum(t.break_seconds for t in emp_tasks)
-        
-        # Check current status in Firestore
-        current_status_task = next((t for t in tasks if t.assigned_to_id == emp.id and t.status == 'active'), None)
-        break_status_task = next((t for t in tasks if t.assigned_to_id == emp.id and t.status == 'break'), None)
-        
-        # Live calculations for active/break time
-        current_active = active_sec
-        current_break = break_sec
-        now = datetime.utcnow()
-        
-        status = 'Free'
-        current_job = ""
-        current_mo = ""
-        
-        if current_status_task:
-            status = 'Working'
-            current_job = current_status_task.description
-            current_mo = current_status_task.mo_reference
-            last_act = current_status_task.last_action_time
-            if last_act:
-                if not isinstance(last_act, datetime):
-                    last_act = last_act.replace(tzinfo=None)
-                diff = (now - last_act).total_seconds()
-                current_active += int(diff)
-        elif break_status_task:
-            status = 'On Break'
-            current_job = break_status_task.description
-            current_mo = break_status_task.mo_reference
-            last_act = break_status_task.last_action_time
-            if last_act:
-                if not isinstance(last_act, datetime):
-                    last_act = last_act.replace(tzinfo=None)
-                diff = (now - last_act).total_seconds()
-                current_break += int(diff)
-
-        person_summary[emp.id] = {
-            'active_sec': current_active,
-            'break_sec': current_break,
-            'total_sec': current_active + current_break,
-            'total_earned': sum(t.active_seconds / 3600.0 * t.hourly_rate for t in emp_tasks) + \
-                           ((current_active - active_sec) / 3600.0 * (current_status_task.hourly_rate if current_status_task else 0)),
-            'status': status,
-            'current_job': current_job,
-            'current_mo': current_mo
-        }
+    person_summary = get_person_summary(employees, tasks)
     
     return render_template('manager_dashboard.html', 
                           employees=employees, 
@@ -183,16 +182,10 @@ def employee_activity():
         return redirect(url_for('main.index'))
     
     db = firestore.client()
-    # Get all employees
     employees_stream = db.collection('users').where('role', '==', 'employee').stream()
-    employees = []
-    for doc in employees_stream:
-        data = doc.to_dict()
-        employees.append(User(id=doc.id, **data))
-        
+    employees = [User(id=doc.id, **doc.to_dict()) for doc in employees_stream]
     tasks = Task.get_all()
     
-    # Pre-sort tasks by completion time (descending)
     tasks_by_emp = {}
     for t in tasks:
         if t.assigned_to_id not in tasks_by_emp:
@@ -203,55 +196,7 @@ def employee_activity():
     for eid in tasks_by_emp:
         tasks_by_emp[eid].sort(key=lambda x: x.get('created_at') or '', reverse=True)
 
-    person_summary = {}
-    for emp in employees:
-        emp_tasks = [t for t in tasks if t.assigned_to_id == emp.id]
-        active_sec = sum(t.active_seconds for t in emp_tasks)
-        break_sec = sum(t.break_seconds for t in emp_tasks)
-        
-        current_status_task = next((t for t in tasks if t.assigned_to_id == emp.id and t.status == 'active'), None)
-        break_status_task = next((t for t in tasks if t.assigned_to_id == emp.id and t.status == 'break'), None)
-        
-        # Live calculations
-        current_active = active_sec
-        current_break = break_sec
-        now = datetime.utcnow()
-        
-        status = 'Free'
-        current_job = ""
-        current_mo = ""
-        
-        if current_status_task:
-            status = 'Working'
-            current_job = current_status_task.description
-            current_mo = current_status_task.mo_reference
-            last_act = current_status_task.last_action_time
-            if last_act:
-                if not isinstance(last_act, datetime):
-                    last_act = last_act.replace(tzinfo=None)
-                diff = (now - last_act).total_seconds()
-                current_active += int(diff)
-        elif break_status_task:
-            status = 'On Break'
-            current_job = break_status_task.description
-            current_mo = break_status_task.mo_reference
-            last_act = break_status_task.last_action_time
-            if last_act:
-                if not isinstance(last_act, datetime):
-                    last_act = last_act.replace(tzinfo=None)
-                diff = (now - last_act).total_seconds()
-                current_break += int(diff)
-
-        person_summary[emp.id] = {
-            'active_sec': current_active,
-            'break_sec': current_break,
-            'total_sec': current_active + current_break,
-            'total_earned': sum(t.active_seconds / 3600.0 * t.hourly_rate for t in emp_tasks) + \
-                           ((current_active - active_sec) / 3600.0 * (current_status_task.hourly_rate if current_status_task else 0)),
-            'status': status,
-            'current_job': current_job,
-            'current_mo': current_mo
-        }
+    person_summary = get_person_summary(employees, tasks)
         
     return render_template('employee_activity.html',
                           employees=employees,
@@ -534,24 +479,7 @@ def reports():
                           hours_by_op=hours_by_op,
                           filters={'employee': emp_id, 'mo': mo_ref, 'start': start_date, 'end': end_date})
 
-@main_bp.route('/api/get_odoo_mos')
-@login_required
-def get_odoo_mos():
-    # Mock data for local testing
-    search = request.args.get('search', '').lower()
-    mock_mos = [
-        {'name': 'MO-001', 'product_id': [1, 'Industrial Motor Assembly'], 'state': 'progress'},
-        {'name': 'MO-002', 'product_id': [2, 'Control Panel Unit'], 'state': 'confirmed'},
-        {'name': 'MO-003', 'product_id': [3, 'Hydraulic Pump Kit'], 'state': 'planned'},
-        {'name': 'MO-004', 'product_id': [4, 'Sensor Array Module'], 'state': 'draft'},
-        {'name': 'MO-005', 'product_id': [5, 'Circuit Board A'], 'state': 'to_close'},
-    ]
-    
-    if search:
-        filtered = [m for m in mock_mos if search in m['name'].lower() or search in m['product_id'][1].lower()]
-        return jsonify(filtered)
-        
-    return jsonify(mock_mos)
+
 
 @main_bp.route('/api/task/<task_id>/cancel', methods=['POST'])
 @login_required
@@ -584,10 +512,13 @@ def assign_task():
         task_id = str(uuid.uuid4())
         task_ref = db.collection('tasks').document(task_id)
         
-        # Fetch worker's predefined rate to avoid frontend tampering or mismatch
+        # Fetch worker's predefined rate to avoid frontend tampering
         user_doc = db.collection('users').document(assign['employee_id']).get()
-        rate = user_doc.to_dict().get('hourly_rate', 0.0) if user_doc.exists else 0.0
-            
+        if user_doc.exists:
+            rate = user_doc.to_dict().get('hourly_rate', 0.0)
+        else:
+            rate = 0.0
+
         task_data = {
             'description': description,
             'mo_reference': mo_ref,
@@ -600,7 +531,7 @@ def assign_task():
             'created_at': firestore.SERVER_TIMESTAMP
         }
         batch.set(task_ref, task_data)
-    
+
     batch.commit()
     return jsonify({'success': True})
 
@@ -612,32 +543,33 @@ def assign_task():
 def task_action(task_id):
     if current_user.role != 'manager':
         return jsonify({'error': 'Unauthorized'}), 403
-    
+
     data = request.get_json() or {}
-    action = data.get('action') 
+    action = data.get('action')
     db = firestore.client()
     task_ref = db.collection('tasks').document(task_id)
     task_doc = task_ref.get()
-    
+
     if not task_doc.exists:
         return jsonify({'error': 'Task not found'}), 404
-        
+
     task_data = task_doc.to_dict()
     now = datetime.utcnow()
-    
+
     def to_naive(dt):
-        if not dt: return now
+        if not dt:
+            return now
         try:
             # Handle Firestore Timestamp objects
             if hasattr(dt, 'to_datetime'):
                 dt = dt.to_datetime()
             # Strip timezone
             return dt.replace(tzinfo=None)
-        except:
+        except Exception:
             return now
 
     updates = {}
-    
+
     if action == 'start':
         updates['status'] = 'active'
         updates['start_time'] = now
@@ -646,8 +578,9 @@ def task_action(task_id):
         if task_data.get('status') == 'active':
             last_act = to_naive(task_data.get('last_action_time'))
             diff = (now - last_act).total_seconds()
-            updates['active_seconds'] = task_data.get('active_seconds', 0) + int(max(0, diff))
-        
+            current_act = task_data.get('active_seconds', 0)
+            updates['active_seconds'] = current_act + int(max(0, diff))
+
         updates['status'] = 'break'
         updates['last_action_time'] = now
         task_ref.collection('breaks').add({
@@ -658,10 +591,14 @@ def task_action(task_id):
         if task_data.get('status') == 'break':
             last_act = to_naive(task_data.get('last_action_time'))
             diff = (now - last_act).total_seconds()
-            updates['break_seconds'] = task_data.get('break_seconds', 0) + int(max(0, diff))
-            
+            current_brk = task_data.get('break_seconds', 0)
+            updates['break_seconds'] = current_brk + int(max(0, diff))
+
             # Close break in subcollection
-            breaks = task_ref.collection('breaks').order_by('start_time', direction=firestore.Query.DESCENDING).limit(1).get()
+            breaks_query = task_ref.collection('breaks').order_by(
+                'start_time', direction=firestore.Query.DESCENDING
+            ).limit(1)
+            breaks = breaks_query.get()
             for b in breaks:
                 b.reference.update({'end_time': now})
 
@@ -670,20 +607,23 @@ def task_action(task_id):
     elif action == 'complete':
         last_act = to_naive(task_data.get('last_action_time'))
         diff = (now - last_act).total_seconds()
-        
         if task_data.get('status') == 'active':
-            updates['active_seconds'] = task_data.get('active_seconds', 0) + int(max(0, diff))
+            current_act = task_data.get('active_seconds', 0)
+            updates['active_seconds'] = current_act + int(max(0, diff))
         elif task_data.get('status') == 'break':
-            updates['break_seconds'] = task_data.get('break_seconds', 0) + int(max(0, diff))
-        
+            current_brk = task_data.get('break_seconds', 0)
+            updates['break_seconds'] = current_brk + int(max(0, diff))
+
         updates['status'] = 'completed'
         updates['end_time'] = now
-        
+
         start_time = to_naive(task_data.get('start_time'))
-        updates['total_duration_seconds'] = int((now - start_time).total_seconds())
+        duration = int((now - start_time).total_seconds())
+        updates['total_duration_seconds'] = duration
 
     task_ref.update(updates)
     return jsonify({'success': True})
+
 
 @main_bp.route('/api/update_employee_rate', methods=['POST'])
 @login_required
@@ -697,6 +637,7 @@ def update_employee_rate():
     })
     return jsonify({'success': True})
 
+
 @main_bp.route('/api/hire_employee', methods=['POST'])
 @login_required
 def hire_employee():
@@ -704,7 +645,7 @@ def hire_employee():
         return jsonify({'error': 'Unauthorized'}), 403
     data = request.json
     db = firestore.client()
-    
+
     username = data.get('username')
     name = data.get('name')
     password = data.get('password')
@@ -722,6 +663,7 @@ def hire_employee():
         'hourly_rate': hourly_rate
     })
     return jsonify({'success': True})
+
 
 @main_bp.route('/api/delete_employee', methods=['POST'])
 @login_required
