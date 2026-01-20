@@ -544,6 +544,71 @@ def reports():
 
 
 
+@main_bp.route('/api/reports/export_csv')
+@login_required
+def export_reports_csv():
+    if current_user.role != 'manager':
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    db = firestore.client()
+    
+    # Get filters
+    emp_id = request.args.get('employee')
+    mo_ref = request.args.get('mo')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    operation = request.args.get('operation')
+    
+    # Fetch data (simplified replication of reports logic)
+    employees_stream = db.collection('users').where('role', '==', 'employee').stream()
+    employees = {doc.id: doc.to_dict().get('name', 'Unknown') for doc in employees_stream}
+    
+    tasks = Task.get_all()
+    
+    import csv
+    from io import StringIO
+    from flask import Response
+    
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Worker', 'Order', 'Operation', 'Start Time', 'Duration (Hours)', 'Duration (Mins)', 'Type', 'Cost', 'Hourly Rate'])
+    
+    for t in tasks:
+        if t.status != 'completed': continue
+        
+        if emp_id and emp_id != 'all' and t.assigned_to_id != emp_id: continue
+        if mo_ref and mo_ref != 'all' and t.mo_reference != mo_ref: continue
+        if operation and operation != 'all' and t.description != operation: continue
+        
+        if start_date:
+            s_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            if t.created_at and t.created_at.replace(tzinfo=None) < s_dt: continue
+        if end_date:
+            e_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            if t.created_at and t.created_at.replace(tzinfo=None) > e_dt: continue
+            
+        worker_name = employees.get(t.assigned_to_id, 'Unknown')
+        duration_hours = (t.active_seconds or 0) / 3600.0
+        cost = duration_hours * t.hourly_rate
+        
+        writer.writerow([
+            worker_name,
+            t.mo_reference,
+            t.description,
+            t.start_time or t.created_at,
+            f"{duration_hours:.2f}",
+            f"{(t.active_seconds or 0) // 60}",
+            'Manual' if getattr(t, 'manual', False) else 'Auto',
+            f"${cost:.2f}",
+            f"${t.hourly_rate:.2f}"
+        ])
+        
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": "attachment; filename=labor_report.csv"}
+    )
+
 @main_bp.route('/api/task/<task_id>/cancel', methods=['POST'])
 @login_required
 def cancel_task(task_id):

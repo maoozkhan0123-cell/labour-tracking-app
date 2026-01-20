@@ -70,9 +70,10 @@
                 <p class="page-subtitle">Labor cost and time analysis</p>
             </div>
             <div style="display: flex; gap: 0.75rem;">
-                <button class="btn btn-secondary" onclick="window.print()"><i class="fa-solid fa-print"></i>
-                    Print</button>
-                <button class="btn btn-primary"><i class="fa-solid fa-file-export"></i> Export CSV</button>
+                <!-- <button class="btn btn-secondary" onclick="window.print()"><i class="fa-solid fa-print"></i> Print</button> -->
+                <button class="btn btn-primary"
+                    onclick="window.location.href='/api/reports/export_csv' + window.location.search"><i
+                        class="fa-solid fa-file-export"></i> Export CSV</button>
             </div>
         </div>
 

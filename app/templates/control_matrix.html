@@ -761,16 +761,19 @@
                 const status = (badge.dataset.status || 'pending').toLowerCase();
                 let totalSec = parseInt(badge.dataset.base) || 0;
 
-                if (status === 'active' || status === 'clocked_out') { // Clocked out keeps timer value but paused logic
+                if (status === 'active') {
                     let startStr = badge.dataset.start;
-                    let baseSeconds = totalSec;
+                    if (startStr) {
+                        // Robust parsing: "2023-01-01 12:00:00" -> "2023-01-01T12:00:00Z"
+                        if (startStr.indexOf('T') === -1) startStr = startStr.replace(' ', 'T');
+                        if (!startStr.endsWith('Z') && !startStr.includes('+')) startStr += 'Z';
 
-                    if (status === 'active') { // Only increment if Active
-                        if (startStr && !startStr.toUpperCase().endsWith('Z')) startStr += 'Z';
                         const startTime = new Date(startStr);
                         if (!isNaN(startTime.getTime())) {
                             const diff = Math.floor((now - startTime) / 1000);
                             if (diff > 0) totalSec += diff;
+                        } else {
+                            console.warn('Invalid timer start date:', badge.dataset.start);
                         }
                     }
                 }
