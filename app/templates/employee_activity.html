@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Employee Activity - WorkTrack</title>
+    <title>Employee Activity - BabylonLLC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -36,46 +36,48 @@
 
 <body>
 
-    <!-- Sidebar Toggle -->
-    <div class="sidebar-toggle" onclick="toggleSidebar()">
-        <i class="fa-solid fa-bars"></i>
-    </div>
 
     <!-- Sidebar -->
     <nav class="sidebar collapsed">
         <div class="brand">
-            <div class="brand-icon">
-                <i class="fa-regular fa-clock"></i>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div class="brand-icon">
+                    <img src="{{ url_for('static', filename='img/babylon.svg') }}" alt="Logo"
+                        style="width: 20px; height: 20px; object-fit: contain;">
+                </div>
+                <span>BabylonLLC</span>
             </div>
-            WorkTrack
+            <button class="sidebar-toggle" onclick="toggleSidebar()">
+                <i class="fa-solid fa-bars"></i>
+            </button>
         </div>
         <ul class="nav-menu">
             <li><a href="{{ url_for('main.manager_dashboard') }}" class="nav-item">
-                    <i class="fa-solid fa-border-all"></i> Dashboard
+                    <i class="fa-solid fa-border-all"></i> <span>Dashboard</span>
                 </a></li>
             <li><a href="{{ url_for('main.control_matrix') }}" class="nav-item">
-                    <i class="fa-solid fa-table-cells"></i> Control Matrix
+                    <i class="fa-solid fa-table-cells"></i> <span>Control Matrix</span>
                 </a></li>
             <li><a href="{{ url_for('main.manufacturing_orders') }}" class="nav-item">
-                    <i class="fa-regular fa-clipboard"></i> Manufacturing Orders
+                    <i class="fa-regular fa-clipboard"></i> <span>Manufacturing Orders</span>
                 </a></li>
             <li><a href="{{ url_for('main.employee_activity') }}" class="nav-item active">
-                    <i class="fa-solid fa-users-viewfinder"></i> Employee Activity
+                    <i class="fa-solid fa-users-viewfinder"></i> <span>Employee Activity</span>
                 </a></li>
             <li><a href="{{ url_for('main.workers') }}" class="nav-item">
-                    <i class="fa-regular fa-user"></i> Workers
+                    <i class="fa-regular fa-user"></i> <span>Workers</span>
                 </a></li>
             <li><a href="{{ url_for('main.operations') }}" class="nav-item">
-                    <i class="fa-solid fa-list-check"></i> Operations
+                    <i class="fa-solid fa-list-check"></i> <span>Operations</span>
                 </a></li>
             <li><a href="{{ url_for('main.reports') }}" class="nav-item">
-                    <i class="fa-solid fa-chart-column"></i> Reports
+                    <i class="fa-solid fa-chart-column"></i> <span>Reports</span>
                 </a></li>
         </ul>
         <div class="bottom-menu">
             <ul class="nav-menu">
                 <li><a href="{{ url_for('main.logout') }}" class="nav-item"><i
-                            class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a></li>
+                            class="fa-solid fa-arrow-right-from-bracket"></i> <span>Logout</span></a></li>
             </ul>
         </div>
     </nav>
@@ -90,8 +92,7 @@
         <div class="section-card">
             <div class="section-header">
                 <h2 class="section-title">Current Status</h2>
-                <button class="btn btn-sm"
-                    style="background:var(--bg-card); border:1px solid var(--border); padding: 0.25rem 0.75rem; border-radius: 6px; cursor: pointer;">Filter</button>
+
             </div>
 
             <div

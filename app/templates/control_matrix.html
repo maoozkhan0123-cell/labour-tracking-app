@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control Matrix - WorkTrack</title>
+    <title>Control Matrix - BabylonLLC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -12,46 +12,48 @@
 
 <body>
 
-    <!-- Sidebar Toggle -->
-    <div class="sidebar-toggle" onclick="toggleSidebar()">
-        <i class="fa-solid fa-bars"></i>
-    </div>
 
     <!-- Sidebar (Shared navigation) -->
     <nav class="sidebar collapsed">
         <div class="brand">
-            <div class="brand-icon">
-                <i class="fa-regular fa-clock"></i>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div class="brand-icon">
+                    <img src="{{ url_for('static', filename='img/babylon.svg') }}" alt="Logo"
+                        style="width: 20px; height: 20px; object-fit: contain;">
+                </div>
+                <span>BabylonLLC</span>
             </div>
-            WorkTrack
+            <button class="sidebar-toggle" onclick="toggleSidebar()">
+                <i class="fa-solid fa-bars"></i>
+            </button>
         </div>
         <ul class="nav-menu">
             <li><a href="{{ url_for('main.manager_dashboard') }}" class="nav-item">
-                    <i class="fa-solid fa-border-all"></i> Dashboard
+                    <i class="fa-solid fa-border-all"></i> <span>Dashboard</span>
                 </a></li>
             <li><a href="{{ url_for('main.control_matrix') }}" class="nav-item active">
-                    <i class="fa-solid fa-table-cells"></i> Control Matrix
+                    <i class="fa-solid fa-table-cells"></i> <span>Control Matrix</span>
                 </a></li>
             <li><a href="{{ url_for('main.manufacturing_orders') }}" class="nav-item">
-                    <i class="fa-regular fa-clipboard"></i> Manufacturing Orders
+                    <i class="fa-regular fa-clipboard"></i> <span>Manufacturing Orders</span>
                 </a></li>
             <li><a href="{{ url_for('main.employee_activity') }}" class="nav-item">
-                    <i class="fa-solid fa-users-viewfinder"></i> Employee Activity
+                    <i class="fa-solid fa-users-viewfinder"></i> <span>Employee Activity</span>
                 </a></li>
             <li><a href="{{ url_for('main.workers') }}" class="nav-item">
-                    <i class="fa-regular fa-user"></i> Workers
+                    <i class="fa-regular fa-user"></i> <span>Workers</span>
                 </a></li>
             <li><a href="{{ url_for('main.operations') }}" class="nav-item">
-                    <i class="fa-solid fa-list-check"></i> Operations
+                    <i class="fa-solid fa-list-check"></i> <span>Operations</span>
                 </a></li>
             <li><a href="{{ url_for('main.reports') }}" class="nav-item">
-                    <i class="fa-solid fa-chart-column"></i> Reports
+                    <i class="fa-solid fa-chart-column"></i> <span>Reports</span>
                 </a></li>
         </ul>
         <div class="bottom-menu">
             <ul class="nav-menu">
                 <li><a href="{{ url_for('main.logout') }}" class="nav-item"><i
-                            class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a></li>
+                            class="fa-solid fa-arrow-right-from-bracket"></i> <span>Logout</span></a></li>
             </ul>
         </div>
     </nav>
@@ -128,13 +130,7 @@
                             {% endif %}
                             {% endfor %}
 
-                            <div class="active-workers-pill {{ 'active' if has_active else 'unactive' }}"
-                                style="margin-top: 8px; width: fit-content; padding: 6px 12px; border-radius: 8px;">
-                                <i class="fa-solid {{ 'fa-circle-play' if has_active else 'fa-circle-pause' }}"
-                                    style="font-size: 0.8rem;"></i>
-                                <span style="font-size: 0.8rem; font-weight: 600;">{{ 'Active' if has_active else
-                                    'Inactive' }}</span>
-                            </div>
+
 
                             <div style="display:flex; align-items:center; margin-top:8px;">
                                 {% for t in cell_tasks[:3] %}
@@ -168,69 +164,153 @@
     <!-- Overlay (for closing offcanvas) -->
     <div id="overlay" class="overlay" onclick="closeAssign()"></div>
 
-    <!-- Offcanvas Sidebar -->
-    <div id="assignSidebar" class="offcanvas"
-        style="width: 800px; right: -850px; padding: 0; box-shadow: -10px 0 30px rgba(0,0,0,0.15);">
-        <div style="padding: 2rem; border-bottom: 1px solid var(--border); position: relative; background: #fff;">
-            <button class="close-btn" onclick="closeAssign()" style="position: absolute; right: 2rem; top: 2rem;"><i
-                    class="fa-solid fa-xmark"></i></button>
-            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
-                <span id="headerMO" class="badge badge-blue"
-                    style="font-size: 0.75rem; padding: 0.2rem 0.6rem;">MO-000</span>
-                <i class="fa-solid fa-arrow-right" style="color: #9CA3AF; font-size: 0.8rem;"></i>
-                <span id="headerOp" class="badge"
-                    style="font-size: 0.75rem; padding: 0.2rem 0.6rem; background: #FAF5FF; color: #7E22CE;">Operation</span>
+    <div id="assignSidebar" class="assign-modal"
+        style="width: 600px; max-height: 85vh; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0.9); opacity: 0; pointer-events: none; background: #ffffff; border-radius: 24px; box-shadow: 0 20px 60px -10px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0,0,0,0.05); z-index: 2100; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; overflow: hidden;">
+
+        <!-- Modal Header -->
+        <div
+            style="padding: 1.5rem 2rem; border-bottom: 1px solid #F1F5F9; background: #fff; display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <h2 id="headerProduct"
+                    style="font-size: 1.25rem; color: #0F172A; font-weight: 700; margin-bottom: 0.25rem; letter-spacing: -0.02em;">
+                    Product Name</h2>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span id="headerMO" class="badge badge-blue"
+                        style="font-size: 0.7rem; padding: 0.25rem 0.6rem; border-radius: 6px;">MO-000</span>
+                    <i class="fa-solid fa-chevron-right" style="color: #CBD5E1; font-size: 0.7rem;"></i>
+                    <span id="headerOp" style="font-size: 0.8rem; font-weight: 600; color: #64748B;">Operation</span>
+                </div>
             </div>
-            <h2 id="headerProduct" style="font-size: 1.1rem; color: var(--text-muted); font-weight: 500;">Product Name
-            </h2>
+            <button class="close-btn" onclick="closeAssign()"
+                style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #F8FAFC; border: 1px solid #E2E8F0; color: #64748B; transition: all 0.2s; cursor: pointer;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
 
-        <div class="offcanvas-body" style="padding: 2rem;">
-            <!-- Assign Worker Section -->
-            <div
-                style="background: white; border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: var(--shadow-sm);">
-                <h3 style="font-size: 0.95rem; font-weight: 700; color: #1E293B; margin-bottom: 1.25rem;">Assign Worker
+        <div class="offcanvas-body" style="padding: 2rem; background: #FCFCFD;">
+            <!-- Assign Worker Section (Centered) -->
+            <div style="margin-bottom: 2.5rem; text-align: center;">
+                <h3 style="font-size: 0.9rem; font-weight: 700; color: #334155; margin-bottom: 1rem;">Assign Team Member
                 </h3>
-                <div style="display: flex; gap: 0.75rem;">
-                    <div style="flex: 2; position: relative;">
-                        <select id="workerSelect"
-                            style="width: 100%; height: 50px; padding: 0 1rem; border-radius: 10px; border: 1.5px solid #E2E8F0; background: white; appearance: none; font-size: 1rem; color: var(--text-main); font-weight: 500; outline: none; transition: border-color 0.2s;">
+                <div
+                    style="background: white; padding: 0.5rem; border-radius: 14px; border: 1px solid #E2E8F0; display: flex; align-items: center; width: 100%; max-width: 480px; margin: 0 auto; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);">
+                    <div style="flex: 1; position: relative;" id="customSelectWrapper">
+                        <!-- Custom Trigger -->
+                        <div onclick="toggleCustomSelect()" id="customSelectTrigger"
+                            style="width: 100%; height: 42px; padding: 0 1rem; border-radius: 10px; background: #F8FAFC; display: flex; align-items: center; justify-content: space-between; cursor: pointer; border: 1px solid transparent; transition: all 0.2s;">
+                            <span id="customSelectValue"
+                                style="font-size: 0.9rem; color: #64748B; font-weight: 500;">Select a worker...</span>
+                            <i class="fa-solid fa-chevron-down" style="color: #64748B; font-size: 0.75rem;"></i>
+                        </div>
+
+                        <!-- Custom Options List -->
+                        <div id="customOptions"
+                            style="position: absolute; top: calc(100% + 8px); left: 0; width: 100%; background: white; border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0,0,0,0.05); z-index: 50; display: none; overflow: hidden; max-height: 240px; overflow-y: auto;">
+
+                            <div class="custom-option" onclick="selectWorker('', 'Select a worker...', '0')"
+                                style="padding: 10px 16px; border-bottom: 1px solid #F1F5F9; cursor: pointer; transition: background 0.15s;">
+                                <div style="font-size: 0.9rem; font-weight: 500; color: #64748B;">Select a worker...
+                                </div>
+                            </div>
+
+                            {% for emp in employees %}
+                            <div class="custom-option"
+                                onclick="selectWorker('{{ emp.id }}', '{{ emp.name }}', '{{ emp.hourly_rate }}')"
+                                style="padding: 10px 16px; border-bottom: 1px solid #F1F5F9; cursor: pointer; transition: background 0.15s;">
+                                <div style="font-size: 0.9rem; font-weight: 600; color: #1E293B;">{{ emp.name }}</div>
+                                <div style="font-size: 0.75rem; color: #64748B; margin-top: 2px;">${{
+                                    "%.2f"|format(emp.hourly_rate) }}/hr</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Hidden Select for Logic Compatibility -->
+                        <select id="workerSelect" style="display: none;">
                             <option value="">Select a worker...</option>
                             {% for emp in employees %}
-                            <option value="{{ emp.id }}" data-rate="{{ emp.hourly_rate }}">{{ emp.name }} (${{
-                                "%.2f"|format(emp.hourly_rate) }}/hr)</option>
+                            <option value="{{ emp.id }}" data-rate="{{ emp.hourly_rate }}">{{ emp.name }}</option>
                             {% endfor %}
                         </select>
-                        <i class="fa-solid fa-chevron-down"
-                            style="position: absolute; right: 1rem; top: 1.1rem; color: #9CA3AF; pointer-events: none;"></i>
                     </div>
                     <button class="btn btn-primary" onclick="assignSingleWorker()"
-                        style="flex: 1; height: 50px; display: flex; align-items: center; justify-content: center; gap: 0.5rem; border-radius: 10px; font-weight: 700; background: #9F97F7; color: white; border: none;">
-                        <i class="fa-solid fa-plus"></i> Assign
+                        style="width: auto !important; flex: 0 0 auto !important; padding: 0 1.5rem; height: 42px; border-radius: 10px; font-weight: 600; background: #4F46E5; color: white; border: none; font-size: 0.9rem; margin-left: 0.5rem; white-space: nowrap; box-shadow: 0 2px 5px rgba(79, 70, 229, 0.2);">
+                        <i class="fa-solid fa-plus" style="margin-right: 4px;"></i> Assign
                     </button>
                 </div>
+
+                <style>
+                    /* Custom Dropdown Hover Effects */
+                    .custom-option:hover {
+                        background: #F1F5F9 !important;
+                    }
+
+                    .custom-option:last-child {
+                        border-bottom: none !important;
+                    }
+
+                    #customSelectTrigger:hover {
+                        background: #F1F5F9 !important;
+                    }
+                </style>
+
+                <script>
+                    function toggleCustomSelect() {
+                        const opts = document.getElementById('customOptions');
+                        const isClosed = opts.style.display === 'none' || opts.style.display === '';
+                        opts.style.display = isClosed ? 'block' : 'none';
+                    }
+
+                    function selectWorker(id, name, rate) {
+                        // Update Hidden Select
+                        const select = document.getElementById('workerSelect');
+                        select.value = id;
+
+                        // Update Trigger UI
+                        const triggerText = document.getElementById('customSelectValue');
+                        if (id) {
+                            triggerText.innerHTML = `<span style="color:#0F172A; font-weight:600;">${name}</span> <span style="color:#64748B; font-weight:400; font-size:0.8rem; margin-left:4px;">($${parseFloat(rate).toFixed(2)}/hr)</span>`;
+                            document.getElementById('customSelectTrigger').style.background = '#EEF2FF';
+                            document.getElementById('customSelectTrigger').style.border = '1px solid #C7D2FE';
+                        } else {
+                            triggerText.innerText = 'Select a worker...';
+                            triggerText.style.color = '#64748B';
+                            document.getElementById('customSelectTrigger').style.background = '#F8FAFC';
+                            document.getElementById('customSelectTrigger').style.border = '1px solid transparent';
+                        }
+
+                        // Close Dropdown
+                        document.getElementById('customOptions').style.display = 'none';
+                    }
+
+                    // Close on click outside
+                    document.addEventListener('click', function (e) {
+                        const wrapper = document.getElementById('customSelectWrapper');
+                        if (wrapper && !wrapper.contains(e.target)) {
+                            document.getElementById('customOptions').style.display = 'none';
+                        }
+                    });
+                </script>
             </div>
 
             <!-- Assigned Workers Section -->
             <div id="assignedSection">
                 <div
-                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #F1F5F9;">
                     <h3 id="assignedCountLabel"
-                        style="font-size: 0.9rem; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">
-                        ASSIGNED WORKERS (0)</h3>
+                        style="font-size: 0.8rem; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em;">
+                        Assigned Workers (0)</h3>
                 </div>
 
-                <div id="assignedList" style="display: flex; flex-direction: column; gap: 1rem;">
+                <div id="assignedList" style="display: flex; flex-direction: column; gap: 0.75rem;">
                     <!-- Placeholder when empty -->
                     <div id="noWorkersState"
-                        style="border: 2px dashed #E2E8F0; border-radius: 16px; padding: 4rem 2rem; text-align: center; color: #94A3B8;">
+                        style="padding: 3rem 1rem; text-align: center; border-radius: 16px; border: 2px dashed #E2E8F0; background: #F8FAFC;">
                         <div
-                            style="background: #F8FAFC; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
-                            <i class="fa-regular fa-user" style="font-size: 1.5rem; opacity: 0.5;"></i>
+                            style="width: 48px; height: 48px; background: #E0E7FF; color: #4F46E5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; font-size: 1.25rem;">
+                            <i class="fa-solid fa-user-plus"></i>
                         </div>
-                        <div style="font-weight: 700; font-size: 1.1rem; color: #1E293B;">No workers assigned</div>
-                        <p style="font-size: 0.95rem; margin-top: 0.5rem; color: #64748B;">Add workers to this operation
-                            to begin tracking</p>
+                        <h4 style="font-weight: 600; color: #1E293B; margin-bottom: 0.25rem;">No workers assigned</h4>
+                        <p style="font-size: 0.9rem; color: #64748B;">Select a worker above to start tracking time.</p>
                     </div>
                 </div>
             </div>
@@ -249,27 +329,25 @@
 
         .timer-badge {
             font-family: 'JetBrains Mono', 'Monaco', monospace;
-            font-weight: 800;
-            color: #1E293B;
-            font-size: 1.2rem;
-            letter-spacing: -0.5px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
         }
 
         .worker-card {
             background: #fff;
             border: 1px solid #E2E8F0;
-            border-radius: 14px;
-            padding: 1rem 1.5rem;
+            border-radius: 16px;
+            padding: 1rem;
             display: flex;
             align-items: center;
-            gap: 1.25rem;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+            width: 100%;
         }
 
         .worker-card:hover {
-            border-color: #9F97F7;
-            box-shadow: 0 8px 15px rgba(159, 151, 247, 0.1);
+            border-color: #818CF8;
+            box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.1);
             transform: translateY(-2px);
         }
 
@@ -294,10 +372,8 @@
             padding: 5px 12px;
             border-radius: 6px;
             text-transform: uppercase;
-            letter-spacing: 0.8px;
-            display: inline-block;
-            text-align: center;
-            min-width: 85px;
+            letter-spacing: 0.05em;
+            white-space: nowrap;
         }
 
         .pill-running {
@@ -307,9 +383,9 @@
         }
 
         .pill-paused {
-            background: #F8FAFC;
-            color: #64748B;
-            border: 1px solid #E2E8F0;
+            background: #FFFBEB;
+            color: #D97706;
+            border: 1px solid #FEF3C7;
         }
 
         .active-workers-pill {
@@ -334,84 +410,85 @@
             border: 1px solid #E2E8F0;
         }
 
-        /* Action Buttons - Outline Style */
-        .action-btn-outline {
-            height: 44px;
-            padding: 0 1.25rem;
-            border-radius: 10px;
-            font-size: 0.9rem;
-            font-weight: 700;
-            cursor: pointer;
+        /* Action Toolbar Styles */
+        .action-toolbar {
+            display: flex;
+            align-items: center;
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 4px;
+            gap: 4px;
+        }
+
+        .toolbar-btn {
+            height: 36px;
+            min-width: 36px;
+            padding: 0 8px;
+            /* flexible width for text buttons */
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 0.6rem;
+            border: none;
+            background: transparent;
+            border-radius: 8px;
+            color: #64748B;
+            cursor: pointer;
             transition: all 0.2s;
-            background: white;
+            font-size: 0.9rem;
             white-space: nowrap;
         }
 
-        .action-btn-outline:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            filter: grayscale(1);
+        .toolbar-btn:hover:not(:disabled) {
+            background: white;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            color: #1E293B;
         }
 
-        .btn-clockin {
-            border: 1.5px solid #10B981;
-            color: #059669;
+        .toolbar-btn.btn-play {
+            color: #4F46E5;
+            background: #EEF2FF;
         }
 
-        .btn-clockin:hover:not(:disabled) {
-            background: #ECFDF5;
-            box-shadow: 0 4px 10px rgba(16, 185, 129, 0.15);
+        /* Blue for Clock In */
+        .toolbar-btn.btn-play:hover {
+            background: #E0E7FF;
         }
 
-        .btn-pause {
-            border: 1.5px solid #F59E0B;
+        .toolbar-btn.btn-pause {
             color: #D97706;
+            background: #FEF3C7;
         }
 
-        .btn-pause:hover:not(:disabled) {
-            background: #FFFBEB;
-            box-shadow: 0 4px 10px rgba(245, 158, 11, 0.15);
+        .toolbar-btn.btn-pause:hover {
+            background: #FDE68A;
         }
 
-        .btn-stop {
-            border: 1.5px solid #EF4444;
+        .toolbar-btn.btn-stop {
             color: #DC2626;
         }
 
-        .btn-stop:hover:not(:disabled) {
+        .toolbar-btn.btn-stop:hover {
             background: #FEF2F2;
-            box-shadow: 0 4px 10px rgba(239, 68, 68, 0.15);
         }
 
-        .trash-btn {
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #94A3B8;
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            font-size: 1.2rem;
-            transition: all 0.2s;
-            border-radius: 10px;
+        .toolbar-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            color: #CBD5E1;
         }
 
-        .trash-btn:hover {
-            color: #EF4444;
-            background: #FEF2F2;
+        .pill-pending {
+            background: #F1F5F9;
+            color: #64748B;
+            border: 1px solid #E2E8F0;
         }
 
         .offcanvas {
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            /* Prevent slider */
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .offcanvas-body {
@@ -423,7 +500,7 @@
 
     <!-- Manual Entry Modal -->
     <div id="manualEntryModal" class="offcanvas"
-        style="right: auto; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 500px; height: auto; border-radius: 12px; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 1001;">
+        style="right: auto; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 700px; height: auto; border-radius: 12px; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 1001;">
         <div class="offcanvas-header" style="margin-bottom: 1.5rem; padding: 2rem 2rem 1rem;">
             <h3 class="offcanvas-title" style="font-size: 1.25rem; font-weight: 700;">Manual Labor Entry</h3>
             <button class="close-btn" onclick="closeManualEntryModal()"><i class="fa-solid fa-xmark"></i></button>
@@ -463,14 +540,14 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div style="display: flex; gap: 1rem;">
-                    <div style="flex: 1;">
+                <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 280px;">
                         <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #475569;">Start
                             Time</label>
                         <input type="datetime-local" id="manual_start"
                             style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border);">
                     </div>
-                    <div style="flex: 1;">
+                    <div style="flex: 1; min-width: 280px;">
                         <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #475569;">End
                             Time</label>
                         <input type="datetime-local" id="manual_end"
@@ -483,9 +560,9 @@
         </div>
     </div>
 
-    <!-- Pause Reason Modal -->
+    <!-- Pause Reason Modal (High Z-Index) -->
     <div id="pauseModal" class="custom-modal"
-        style="width: 450px; padding: 0; border-radius: 16px; overflow: hidden; background: white;">
+        style="width: 450px; padding: 0; border-radius: 16px; overflow: hidden; background: white; z-index: 2200; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.9); opacity: 0; pointer-events: none; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
         <div class="modal-header"
             style="padding: 1.5rem 2rem; border-bottom: none; display: flex; justify-content: space-between; align-items: center;">
             <h3 style="font-size: 1.25rem; font-weight: 700; color: #111;">Pause Reason</h3>
@@ -537,10 +614,13 @@
             document.getElementById('headerOp').innerText = op;
             document.getElementById('headerProduct').innerText = currentProduct;
 
-            // Show Sidebar
-            document.getElementById('assignSidebar').classList.add('show');
-            document.getElementById('assignSidebar').style.right = '0';
+            // Show Modal
+            const modal = document.getElementById('assignSidebar');
+            modal.style.opacity = '1';
+            modal.style.pointerEvents = 'auto';
+            modal.style.transform = 'translate(-50%, -50%) scale(1)';
             document.getElementById('overlay').classList.add('active');
+            document.getElementById('overlay').style.zIndex = '2050';
 
             renderAssignedWorkers();
 
@@ -549,8 +629,10 @@
         }
 
         function closeAssign() {
-            document.getElementById('assignSidebar').classList.remove('show');
-            document.getElementById('assignSidebar').style.right = '-850px';
+            const modal = document.getElementById('assignSidebar');
+            modal.style.opacity = '0';
+            modal.style.pointerEvents = 'none';
+            modal.style.transform = 'translate(-50%, -50%) scale(0.9)';
             document.getElementById('overlay').classList.remove('active');
             if (refreshInterval) clearInterval(refreshInterval);
         }
@@ -577,53 +659,95 @@
                 const worker = employeeMap[task.assigned_to_id] || { name: 'Unknown' };
                 const initials = (worker.name || '?').substring(0, 1).toUpperCase();
 
-                // Dynamic Action Buttons Logic
-                let clockBtn = '';
-                let pauseBtn = '';
+                // Status Determination (Case insensitive)
+                const statusStr = (task.status || 'pending').toLowerCase();
+                const isPending = statusStr === 'pending';
+                const isClockedOut = statusStr === 'clocked_out';
+                const isActive = statusStr === 'active';
+                const isBreak = statusStr === 'break';
 
-                if (task.status === 'pending') {
-                    clockBtn = `<button class="action-btn-outline btn-clockin" onclick="performTaskAction('${task.id}', 'start')" style="min-width: 130px;">
-                                    <i class="fa-solid fa-right-to-bracket"></i> Clock In
-                                </button>`;
-                    pauseBtn = `<button class="action-btn-outline" disabled style="min-width: 120px; border-color: #F1F5F9; color: #CBD5E1;">
-                                    <i class="fa-solid fa-pause"></i> Pause
-                                </button>`;
-                } else if (task.status === 'active') {
-                    clockBtn = `<button class="action-btn-outline btn-stop" onclick="performTaskAction('${task.id}', 'complete')" style="min-width: 130px;">
-                                    <i class="fa-solid fa-arrow-right-from-bracket"></i> Clock Out
-                                </button>`;
-                    pauseBtn = `<button class="action-btn-outline btn-pause" onclick="taskAction('${task.id}', 'break')" style="min-width: 120px;">
-                                    <i class="fa-solid fa-pause"></i> Pause
-                                </button>`;
-                } else if (task.status === 'break') {
-                    clockBtn = `<button class="action-btn-outline btn-stop" onclick="performTaskAction('${task.id}', 'complete')" style="min-width: 130px;">
-                                    <i class="fa-solid fa-arrow-right-from-bracket"></i> Clock Out
-                                </button>`;
-                    pauseBtn = `<button class="action-btn-outline btn-clockin" onclick="performTaskAction('${task.id}', 'resume')" style="min-width: 120px; border-color: #10B981; color: #059669;">
-                                    <i class="fa-solid fa-play"></i> Resume
-                                </button>`;
+                let statusLabel = 'PENDING';
+                let statusClass = 'pill-pending'; // gray
+                if (isActive) { statusLabel = 'CLOCKED IN'; statusClass = 'pill-running'; }
+                else if (isBreak) { statusLabel = 'PAUSED'; statusClass = 'pill-paused'; }
+                else if (isClockedOut) { statusLabel = 'CLOCKED OUT'; statusClass = 'pill-paused'; }
+
+                // Toolbar Button Logic
+                const showClockIn = isPending || isClockedOut;
+                const showClockOut = isActive || isBreak;
+                const showPause = isActive;
+                const showResume = isBreak;
+
+                let toolbarHtml = '';
+
+                if (showClockIn) {
+                    toolbarHtml += `
+                        <button class="toolbar-btn btn-play" onclick="performTaskAction('${task.id}', 'clock_in')" title="Clock In">
+                            <span style="font-weight:600; font-size:0.8rem; margin-left:2px;">Clock In</span> <i class="fa-solid fa-arrow-right-to-bracket" style="margin-left:6px;"></i>
+                        </button>`;
                 }
 
-                card.innerHTML = `
-                    <div class="avatar-lg">${initials}</div>
-                    <div style="flex: 0 0 150px;">
-                        <div style="font-weight: 700; color: #1E293B; font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${worker.name}</div>
-                        <div style="font-size: 0.9rem; color: #64748B; font-weight: 600; margin-top: 2px;">$${task.hourly_rate}/hr</div>
-                    </div>
-                    
-                    <div style="flex: 0 0 110px;">
-                        <span class="status-pill ${task.status === 'active' ? 'pill-running' : 'pill-paused'}">${task.status === 'active' ? 'RUNNING' : (task.status === 'break' ? 'PAUSED' : 'PENDING')}</span>
-                    </div>
+                if (showResume) {
+                    toolbarHtml += `
+                        <button class="toolbar-btn btn-play" onclick="performTaskAction('${task.id}', 'resume')" title="Resume Work">
+                            <span style="font-weight:600; font-size:0.8rem; margin-left:2px;">Resume</span> <i class="fa-solid fa-play" style="margin-left:6px;"></i>
+                        </button>`;
+                }
 
-                    <div class="timer-badge" style="flex: 1; font-size: 1.3rem; text-align: center; color: #1E293B;" data-start="${task.last_action_time}" data-base="${task.active_seconds}" data-status="${task.status}">00:00:00</div>
-                    
-                    <div style="display: flex; gap: 0.75rem; align-items: center; flex-shrink: 0; margin-left: 1rem;">
-                        ${clockBtn}
-                        ${pauseBtn}
-                        <div style="width: 1px; height: 32px; background: #E2E8F0; margin: 0 0.25rem;"></div>
-                        <button class="trash-btn" onclick="deleteTask('${task.id}')">
+                if (showClockOut) {
+                    toolbarHtml += `
+                        <button class="toolbar-btn btn-pause" onclick="performTaskAction('${task.id}', 'clock_out')" title="Clock Out (End Shift)">
+                             <span style="font-weight:600; font-size:0.8rem; margin-left:2px;">Clock Out</span> <i class="fa-solid fa-arrow-right-from-bracket" style="margin-left:6px;"></i>
+                        </button>`;
+                }
+
+                if (showPause) {
+                    toolbarHtml += `
+                        <button class="toolbar-btn" onclick="taskAction('${task.id}', 'break')" title="Pause (Break)" style="color:#F59E0B;">
+                            <i class="fa-solid fa-pause"></i>
+                        </button>`;
+                }
+
+                // Stop Button (Finalize Task)
+                const showStop = !isPending;
+                if (showStop) {
+                    toolbarHtml += `
+                        <div style="width: 1px; height: 20px; background: #E2E8F0; margin: 0 4px;"></div>
+                        <button class="toolbar-btn btn-stop" onclick="performTaskAction('${task.id}', 'complete')" title="Complete Task">
+                            <i class="fa-solid fa-check"></i>
+                        </button>`;
+                }
+
+                // Trash (Always)
+                toolbarHtml += `
+                        <button class="toolbar-btn" onclick="deleteTask('${task.id}')" title="Remove Assignment" style="margin-left:2px;">
                             <i class="fa-regular fa-trash-can"></i>
-                        </button>
+                        </button>`;
+
+
+                card.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 1rem; width: 100%;">
+                        <!-- Avatar -->
+                        <div class="avatar-lg" style="width: 44px; height: 44px; font-size: 1rem; flex-shrink: 0; box-shadow: none; border: 2px solid white; background: var(--primary);">${initials}</div>
+                        
+                        <!-- Info -->
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 4px;">
+                                <div style="font-weight: 700; color: #1E293B; font-size: 0.95rem;">${worker.name}</div>
+                                <span class="status-pill ${statusClass}" style="font-size: 0.65rem; padding: 3px 8px;">
+                                    ${statusLabel}
+                                </span>
+                            </div>
+                            <div style="display:flex; align-items: center; gap: 1rem;">
+                                <div style="font-size: 0.8rem; color: #64748B; font-weight: 500;">$${task.hourly_rate}/hr</div>
+                                <div class="timer-badge" style="font-size: 1rem; color: #334155;" data-start="${task.last_action_time}" data-base="${task.active_seconds}" data-status="${task.status}">00:00:00</div>
+                            </div>
+                        </div>
+
+                        <!-- Action Toolbar -->
+                        <div class="action-toolbar" style="gap:2px; padding: 4px 8px;">
+                            ${toolbarHtml}
+                        </div>
                     </div>
                 `;
                 list.appendChild(card);
@@ -634,19 +758,20 @@
         function updateTimers() {
             const now = new Date();
             document.querySelectorAll('.timer-badge').forEach(badge => {
-                const status = badge.dataset.status;
+                const status = (badge.dataset.status || 'pending').toLowerCase();
                 let totalSec = parseInt(badge.dataset.base) || 0;
 
-                if (status === 'active') {
-                    // Force UTC parsing to avoid 5-hour jumps
+                if (status === 'active' || status === 'clocked_out') { // Clocked out keeps timer value but paused logic
                     let startStr = badge.dataset.start;
-                    if (startStr && !startStr.includes('Z')) {
-                        startStr += 'Z';
-                    }
-                    const startTime = new Date(startStr);
-                    if (!isNaN(startTime)) {
-                        const diff = Math.floor((now - startTime) / 1000);
-                        if (diff > 0) totalSec += diff;
+                    let baseSeconds = totalSec;
+
+                    if (status === 'active') { // Only increment if Active
+                        if (startStr && !startStr.toUpperCase().endsWith('Z')) startStr += 'Z';
+                        const startTime = new Date(startStr);
+                        if (!isNaN(startTime.getTime())) {
+                            const diff = Math.floor((now - startTime) / 1000);
+                            if (diff > 0) totalSec += diff;
+                        }
                     }
                 }
 
@@ -694,14 +819,35 @@
         }
 
         function openPauseModal() {
-            document.getElementById('pause_reason_input').value = 'Break';
-            document.getElementById('pauseModal').classList.add('active');
+            document.getElementById('pause_reason_input').value = ''; // Clear previous input
+            const modal = document.getElementById('pauseModal');
+            modal.style.opacity = '1';
+            modal.style.pointerEvents = 'auto';
+            modal.style.transform = 'translate(-50%, -50%) scale(1)';
+
+            // Ensure overlay is above sidebar
             document.getElementById('overlay').classList.add('active');
+            document.getElementById('overlay').style.zIndex = '2150'; // Between sidebar (2100) and pause modal (2200)
         }
 
         function closePauseModal() {
-            document.getElementById('pauseModal').classList.remove('active');
-            document.getElementById('overlay').classList.remove('active');
+            const modal = document.getElementById('pauseModal');
+            modal.style.opacity = '0';
+            modal.style.pointerEvents = 'none';
+            modal.style.transform = 'translate(-50%, -50%) scale(0.9)';
+
+            // Only remove overlay active if sidebar is NOT active. 
+            // Actually sidebar uses overlay too. We need to be careful not to close sidebar overlay if sidebar is open.
+            // But here we're using a single overlay #overlay. 
+            // If we close pause modal, and assignment sidebar is open, overlay should remain.
+            // Let's check if sidebar is active.
+            const sidebar = document.getElementById('assignSidebar');
+            if (sidebar.style.opacity !== '1') {
+                document.getElementById('overlay').classList.remove('active');
+            } else {
+                // Ensure overlay z-index returns to sidebar level
+                document.getElementById('overlay').style.zIndex = '2050';
+            }
             currentActionTaskId = null;
         }
 
@@ -709,7 +855,7 @@
             const reason = document.getElementById('pause_reason_input').value;
             if (!reason) return alert('Reason is required');
             performTaskAction(currentActionTaskId, 'break', reason);
-            closePauseModal();
+            // Modal close is handled by page reload in performTaskAction success
         };
 
         async function performTaskAction(taskId, action, reason = null) {

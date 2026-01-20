@@ -133,7 +133,7 @@ def control_matrix():
     
     # 2. Get Active/Paused Tasks for the Matrix cells
     tasks = Task.get_all()
-    filtered_tasks = [t for t in tasks if t.status in ['active', 'break', 'pending']]
+    filtered_tasks = [t for t in tasks if t.status in ['active', 'break', 'pending', 'clocked_out', 'Active', 'Break', 'Pending']]
     
     # 3. Get MOs from Firestore - sorted by ID
     mos_stream = db.collection('manufacturing_orders').order_by('id').stream()
@@ -151,6 +151,14 @@ def control_matrix():
     doc = ops_ref.get()
     if doc.exists:
         ops_data = doc.to_dict().get('list', [])
+        # Sort operations by ID to guarantee fixed column order in Control Matrix
+        # strictly as requested ("arrangement should not be change")
+        try:
+            ops_data.sort(key=lambda x: int(x['id']))
+            print(f"DEBUG: Sorted operations: {[op['name'] for op in ops_data]}")
+        except Exception as e:
+            print(f"DEBUG: Sort failed: {e}")
+            
         operations = [op['name'] for op in ops_data]
     else:
         operations = [] # Start empty as requested "there is not any predefined operations"
@@ -169,17 +177,21 @@ def manufacturing_orders():
         return redirect(url_for('main.index'))
     
     db = firestore.client()
-    mos_stream = db.collection('manufacturing_orders').order_by('id').stream()
-    orders = [doc.to_dict() for doc in mos_stream]
+    mos_stream = db.collection('manufacturing_orders').order_by('created_at', direction=firestore.Query.DESCENDING).stream()
+    orders = []
+    for doc in mos_stream:
+        d = doc.to_dict()
+        d['id'] = doc.id
+        orders.append(d)
     
     if not orders:
         # Initial seeding if empty
         orders = [
-            {'id': 'MO-001', 'product': 'Industrial Motor Assembly', 'status': 'progress', 'dates': 'Jan 15 → Feb 15'},
-            {'id': 'MO-002', 'product': 'Control Panel Unit', 'status': 'progress', 'dates': 'Jan 20 → Feb 20'},
-            {'id': 'MO-003', 'product': 'Hydraulic Pump Kit', 'status': 'draft', 'dates': 'Feb 1 → Mar 1'},
-            {'id': 'MO-004', 'product': 'Sensor Array Module', 'status': 'completed', 'dates': 'Jan 1 → Jan 14'},
-            {'id': 'MO-005', 'product': 'Conveyor Belt Section', 'status': 'draft', 'dates': 'Feb 10 → Mar 10'},
+            {'id': 'MO-001', 'product': 'Industrial Motor Assembly', 'status': 'progress', 'dates': 'Jan 15 → Feb 15', 'created_at': datetime.utcnow()},
+            {'id': 'MO-002', 'product': 'Control Panel Unit', 'status': 'progress', 'dates': 'Jan 20 → Feb 20', 'created_at': datetime.utcnow()},
+            {'id': 'MO-003', 'product': 'Hydraulic Pump Kit', 'status': 'draft', 'dates': 'Feb 1 → Mar 1', 'created_at': datetime.utcnow()},
+            {'id': 'MO-004', 'product': 'Sensor Array Module', 'status': 'completed', 'dates': 'Jan 1 → Jan 14', 'created_at': datetime.utcnow()},
+            {'id': 'MO-005', 'product': 'Conveyor Belt Section', 'status': 'draft', 'dates': 'Feb 10 → Mar 10', 'created_at': datetime.utcnow()},
         ]
         for o in orders:
             db.collection('manufacturing_orders').document(o['id']).set(o)
@@ -258,8 +270,14 @@ def add_operation():
     doc = ops_ref.get()
     ops = doc.to_dict().get('list', []) if doc.exists else []
     
+    # Generate new ID safely (max existing ID + 1)
+    if ops:
+        new_id = max(int(op['id']) for op in ops) + 1
+    else:
+        new_id = 1
+    
     new_op = {
-        'id': len(ops) + 1,
+        'id': new_id,
         'name': data['name'],
         'desc': data.get('desc', '')
     }
@@ -272,14 +290,15 @@ def add_operation():
 def add_order():
     data = request.json
     db = firestore.client()
-    
+
     # Simple ID generation or use provided ID
     mo_id = data.get('id', str(uuid.uuid4())[:8].upper())
-    
+
     db.collection('manufacturing_orders').document(mo_id).set({
+        'id': mo_id,
         'product': data.get('product', 'Unknown Product'),
         'status': 'draft',
-        'dates': data.get('dates', datetime.utcnow().strftime('%Y-%m-%d')),
+        'dates': data.get('dates', datetime.utcnow().strftime('%b %d → %b %d')),
         'created_at': datetime.utcnow()
     })
     return jsonify({'success': True})
@@ -335,6 +354,43 @@ def update_operation():
     ops_ref.set({'list': ops})
     return jsonify({'success': True})
 
+@main_bp.route('/api/operations/reorder', methods=['POST'])
+@login_required
+def reorder_operations():
+    data = request.json
+    db = firestore.client()
+    ops_ref = db.collection('settings').document('operations')
+    doc = ops_ref.get()
+    
+    if not doc.exists:
+        return jsonify({'error': 'No operations found'}), 404
+        
+    current_ops = doc.to_dict().get('list', [])
+    ops_map = {str(op['id']): op for op in current_ops}
+    
+    # Deduplicate input IDs while preserving order
+    ordered_ids = []
+    seen = set()
+    for oid in data.get('ids', []):
+        if oid not in seen:
+            seen.add(oid)
+            ordered_ids.append(oid)
+
+    ordered_ops = []
+    
+    for op_id in ordered_ids:
+        if str(op_id) in ops_map:
+            ordered_ops.append(ops_map[str(op_id)])
+            
+    # Append any missing ops to prevent data loss
+    claimed_ids = set(str(oid) for oid in ordered_ids)
+    for op in current_ops:
+        if str(op['id']) not in claimed_ids:
+            ordered_ops.append(op)
+            
+    ops_ref.update({'list': ordered_ops})
+    return jsonify({'success': True})
+
 @main_bp.route('/api/operations/delete', methods=['POST'])
 @login_required
 def delete_operation():
@@ -349,10 +405,6 @@ def delete_operation():
     op_name = next((op['name'] for op in ops if str(op['id']) == str(data['id'])), None)
     
     if op_name:
-        # Optionally delete tasks? The user says "the operation should delete from control matrix"
-        # Columns in matrix are based on the settings list. 
-        # But should we delete the records? Probably safer to just let the column disappear.
-        # User says "the operation should delete from control matrix and update"
         pass
 
     ops = [op for op in ops if str(op['id']) != str(data['id'])]
@@ -571,66 +623,78 @@ def task_action(task_id):
         if not dt:
             return now
         try:
-            # Handle Firestore Timestamp objects
             if hasattr(dt, 'to_datetime'):
                 dt = dt.to_datetime()
-            # Strip timezone
             return dt.replace(tzinfo=None)
         except Exception:
             return now
 
     updates = {}
+    current_status = task_data.get('status', 'pending')
+    last_act = to_naive(task_data.get('last_action_time'))
+    
+    # Calculate duration since last action if relevant
+    diff = int((now - last_act).total_seconds()) if last_act else 0
+    if diff < 0: diff = 0
 
-    if action == 'start':
-        updates['status'] = 'active'
-        updates['start_time'] = now
-        updates['last_action_time'] = now
-    elif action == 'break':
-        if task_data.get('status') == 'active':
-            last_act = to_naive(task_data.get('last_action_time'))
-            diff = (now - last_act).total_seconds()
-            current_act = task_data.get('active_seconds', 0)
-            updates['active_seconds'] = current_act + int(max(0, diff))
-
-        updates['status'] = 'break'
-        updates['last_action_time'] = now
-        task_ref.collection('breaks').add({
-            'reason': data.get('reason', 'Break'),
-            'start_time': now
-        })
-    elif action == 'resume':
-        if task_data.get('status') == 'break':
-            last_act = to_naive(task_data.get('last_action_time'))
-            diff = (now - last_act).total_seconds()
+    if action == 'clock_in' or action == 'start' or action == 'resume':
+        # From Pending/Clocked_Out -> Active: Start/Resume timer
+        # From Break -> Active: Resume timer (close break)
+        
+        if current_status == 'break':
             current_brk = task_data.get('break_seconds', 0)
-            updates['break_seconds'] = current_brk + int(max(0, diff))
-
-            # Close break in subcollection
-            breaks_query = task_ref.collection('breaks').order_by(
-                'start_time', direction=firestore.Query.DESCENDING
-            ).limit(1)
-            breaks = breaks_query.get()
-            for b in breaks:
+            updates['break_seconds'] = current_brk + diff
+            
+            # Close break record
+            breaks_query = task_ref.collection('breaks').order_by('start_time', direction=firestore.Query.DESCENDING).limit(1)
+            for b in breaks_query.stream():
                 b.reference.update({'end_time': now})
 
         updates['status'] = 'active'
         updates['last_action_time'] = now
-    elif action == 'complete':
-        last_act = to_naive(task_data.get('last_action_time'))
-        diff = (now - last_act).total_seconds()
-        if task_data.get('status') == 'active':
+        if not task_data.get('start_time'):
+            updates['start_time'] = now
+
+    elif action == 'clock_out': # Partial day end (Shift End), Task NOT Complete
+        if current_status == 'active':
             current_act = task_data.get('active_seconds', 0)
-            updates['active_seconds'] = current_act + int(max(0, diff))
-        elif task_data.get('status') == 'break':
+            updates['active_seconds'] = current_act + diff
+        elif current_status == 'break':
             current_brk = task_data.get('break_seconds', 0)
-            updates['break_seconds'] = current_brk + int(max(0, diff))
+            updates['break_seconds'] = current_brk + diff
+
+        updates['status'] = 'clocked_out'
+        updates['last_action_time'] = now
+
+    elif action == 'break':
+        if current_status == 'active':
+            current_act = task_data.get('active_seconds', 0)
+            updates['active_seconds'] = current_act + diff
+        
+        updates['status'] = 'break'
+        updates['last_action_time'] = now
+        updates['reason'] = data.get('reason', 'Break')
+        
+        task_ref.collection('breaks').add({
+            'reason': data.get('reason', 'Break'),
+            'start_time': now
+        })
+
+    elif action == 'complete': # Stop Button (Finalize Task)
+        if current_status == 'active':
+            current_act = task_data.get('active_seconds', 0)
+            updates['active_seconds'] = current_act + diff
+        elif current_status == 'break':
+            current_brk = task_data.get('break_seconds', 0)
+            updates['break_seconds'] = current_brk + diff
 
         updates['status'] = 'completed'
         updates['end_time'] = now
-
+        
+        # Total duration checks
         start_time = to_naive(task_data.get('start_time'))
-        duration = int((now - start_time).total_seconds())
-        updates['total_duration_seconds'] = duration
+        if start_time:
+            updates['total_duration_seconds'] = int((now - start_time).total_seconds())
 
     task_ref.update(updates)
     return jsonify({'success': True})
