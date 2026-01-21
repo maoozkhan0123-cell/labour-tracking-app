@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Table - BabylonLLC</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+
+<body>
+
+    <!-- Sidebar (Shared navigation) -->
+    <nav class="sidebar collapsed">
+        <div class="brand">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div class="brand-icon">
+                    <img src="{{ url_for('static', filename='img/babylon.svg') }}" alt="Logo"
+                        style="width: 20px; height: 20px; object-fit: contain;">
+                </div>
+                <span>BabylonLLC</span>
+            </div>
+            <button class="sidebar-toggle" onclick="toggleSidebar()">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="{{ url_for('main.manager_dashboard') }}" class="nav-item">
+                    <i class="fa-solid fa-border-all"></i> <span>Dashboard</span>
+                </a></li>
+            <li><a href="{{ url_for('main.control_matrix') }}" class="nav-item">
+                    <i class="fa-solid fa-table-cells"></i> <span>Control Matrix</span>
+                </a></li>
+            <li><a href="{{ url_for('main.control_table') }}" class="nav-item active">
+                    <i class="fa-solid fa-table-list"></i> <span>Control Table</span>
+                </a></li>
+            <li><a href="{{ url_for('main.manufacturing_orders') }}" class="nav-item">
+                    <i class="fa-regular fa-clipboard"></i> <span>Manufacturing Orders</span>
+                </a></li>
+            <li><a href="{{ url_for('main.employee_activity') }}" class="nav-item">
+                    <i class="fa-solid fa-users-viewfinder"></i> <span>Employee Activity</span>
+                </a></li>
+            <li><a href="{{ url_for('main.workers') }}" class="nav-item">
+                    <i class="fa-regular fa-user"></i> <span>Workers</span>
+                </a></li>
+            <li><a href="{{ url_for('main.operations') }}" class="nav-item">
+                    <i class="fa-solid fa-list-check"></i> <span>Operations</span>
+                </a></li>
+            <li><a href="{{ url_for('main.reports') }}" class="nav-item">
+                    <i class="fa-solid fa-chart-column"></i> <span>Reports</span>
+                </a></li>
+        </ul>
+        <div class="bottom-menu">
+            <ul class="nav-menu">
+                <li><a href="{{ url_for('main.logout') }}" class="nav-item"><i
+                            class="fa-solid fa-arrow-right-from-bracket"></i> <span>Logout</span></a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content expanded">
+        <div class="page-header">
+            <h1 class="page-title">Control Table</h1>
+            <p class="page-subtitle">Real-time tracking of worker task activities</p>
+        </div>
+
+        <!-- Control Table Section -->
+        <div class="section-card">
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                    <thead>
+                        <tr style="background: #F8FAFC; border-bottom: 2px solid #E2E8F0;">
+                            <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: #475569;">
+                                Worker</th>
+                            <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: #475569;">MO
+                            </th>
+                            <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: #475569;">
+                                Operation</th>
+                            <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: #475569;">Start
+                                Time</th>
+                            <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: #475569;">Last
+                                Action</th>
+                            <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: #475569;">
+                                Duration</th>
+                            <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: #475569;">
+                                Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in tasks %}
+                        {% set worker = emp_map.get(t.assigned_to_id) %}
+                        <tr style="border-bottom: 1px solid #F1F5F9;">
+                            <td style="padding: 0.75rem 1rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <div
+                                        style="width: 32px; height: 32px; background: var(--primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem;">
+                                        {{ worker.name[0] if worker else '?' }}
+                                    </div>
+                                    <span style="font-weight: 600; color: #1E293B;">{{ worker.name if worker else
+                                        'Unknown' }}</span>
+                                </div>
+                            </td>
+                            <td style="padding: 0.75rem 1rem;">
+                                <span class="badge badge-blue" style="font-size: 0.75rem;">{{ t.mo_reference }}</span>
+                            </td>
+                            <td style="padding: 0.75rem 1rem; color: #475569;">{{ t.description }}</td>
+                            <td style="padding: 0.75rem 1rem; color: #64748B; font-size: 0.85rem;">
+                                {% if t.start_time %}
+                                {{ t.start_time.strftime('%I:%M %p') if t.start_time is not string else
+                                t.start_time[:16] }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td style="padding: 0.75rem 1rem; color: #64748B; font-size: 0.85rem;">
+                                {% if t.last_action_time %}
+                                {{ t.last_action_time.strftime('%I:%M %p') if t.last_action_time is not string else
+                                t.last_action_time[:16] }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td style="padding: 0.75rem 1rem;">
+                                {% set hours = (t.active_seconds // 3600) %}
+                                {% set mins = ((t.active_seconds % 3600) // 60) %}
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span class="duration-display" id="duration-{{ t.id }}"
+                                        style="font-family: 'JetBrains Mono', monospace; color: #334155; font-weight: 600;">
+                                        {{ "%02d:%02d"|format(hours, mins) }}
+                                    </span>
+                                    <input type="text" class="duration-edit" id="duration-edit-{{ t.id }}"
+                                        value="{{ '%02d:%02d'|format(hours, mins) }}"
+                                        style="display: none; width: 70px; padding: 0.25rem 0.5rem; border: 2px solid var(--primary); border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-weight: 600;"
+                                        placeholder="HH:MM">
+                                    <button onclick="toggleEditDuration('{{ t.id }}')" class="edit-duration-btn"
+                                        id="edit-btn-{{ t.id }}"
+                                        style="background: none; border: none; color: var(--primary); cursor: pointer; padding: 0.25rem; display: flex; align-items: center;">
+                                        <i class="fa-solid fa-pen-to-square" style="font-size: 0.9rem;"></i>
+                                    </button>
+                                    <div class="edit-actions" id="edit-actions-{{ t.id }}"
+                                        style="display: none; gap: 0.25rem;">
+                                        <button onclick="saveDuration('{{ t.id }}')"
+                                            style="background: var(--success); color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">
+                                            <i class="fa-solid fa-check"></i>
+                                        </button>
+                                        <button onclick="cancelEditDuration('{{ t.id }}')"
+                                            style="background: var(--danger); color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="padding: 0.75rem 1rem;">
+                                {% if t.status == 'active' %}
+                                <span class="status-badge badge-green" style="font-size: 0.7rem;">TIMER RUNNING</span>
+                                {% elif t.status == 'clocked_in' %}
+                                <span class="status-badge badge-blue" style="font-size: 0.7rem;">CLOCKED IN</span>
+                                {% elif t.status == 'break' %}
+                                <span class="status-badge badge-yellow" style="font-size: 0.7rem;">ON BREAK</span>
+                                {% elif t.status == 'clocked_out' %}
+                                <span class="status-badge badge-gray" style="font-size: 0.7rem;">CLOCKED OUT</span>
+                                {% elif t.status == 'pending' %}
+                                <span class="status-badge badge-gray" style="font-size: 0.7rem;">PENDING</span>
+                                {% else %}
+                                <span class="status-badge badge-gray" style="font-size: 0.7rem;">{{ t.status.upper()
+                                    }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const mainContent = document.querySelector('.main-content');
+            const toggleIcon = document.querySelector('.sidebar-toggle i');
+
+            sidebar.classList.toggle('collapsed');
+            mainContent.classList.toggle('expanded');
+
+            if (sidebar.classList.contains('collapsed')) {
+                toggleIcon.classList.remove('fa-xmark');
+                toggleIcon.classList.add('fa-bars');
+            } else {
+                toggleIcon.classList.remove('fa-bars');
+                toggleIcon.classList.add('fa-xmark');
+            }
+        }
+
+        function toggleEditDuration(taskId) {
+            const display = document.getElementById(`duration-${taskId}`);
+            const input = document.getElementById(`duration-edit-${taskId}`);
+            const editBtn = document.getElementById(`edit-btn-${taskId}`);
+            const actions = document.getElementById(`edit-actions-${taskId}`);
+
+            display.style.display = 'none';
+            input.style.display = 'block';
+            editBtn.style.display = 'none';
+            actions.style.display = 'flex';
+            input.focus();
+            input.select();
+        }
+
+        function cancelEditDuration(taskId) {
+            const display = document.getElementById(`duration-${taskId}`);
+            const input = document.getElementById(`duration-edit-${taskId}`);
+            const editBtn = document.getElementById(`edit-btn-${taskId}`);
+            const actions = document.getElementById(`edit-actions-${taskId}`);
+
+            display.style.display = 'block';
+            input.style.display = 'none';
+            editBtn.style.display = 'flex';
+            actions.style.display = 'none';
+
+            // Reset input to original value
+            input.value = display.textContent.trim();
+        }
+
+        async function saveDuration(taskId) {
+            const input = document.getElementById(`duration-edit-${taskId}`);
+            const display = document.getElementById(`duration-${taskId}`);
+            const value = input.value.trim();
+
+            // Validate format HH:MM
+            const timeRegex = /^(\d{1,2}):(\d{2})$/;
+            const match = value.match(timeRegex);
+
+            if (!match) {
+                alert('Invalid format. Please use HH:MM (e.g., 02:30)');
+                return;
+            }
+
+            const hours = parseInt(match[1]);
+            const minutes = parseInt(match[2]);
+
+            if (minutes >= 60) {
+                alert('Minutes must be less than 60');
+                return;
+            }
+
+            const totalSeconds = (hours * 3600) + (minutes * 60);
+
+            try {
+                const res = await fetch(`/api/task/${taskId}/edit_time`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ active_seconds: totalSeconds })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    // Update display
+                    const newHours = Math.floor(data.active_seconds / 3600);
+                    const newMins = Math.floor((data.active_seconds % 3600) / 60);
+                    display.textContent = `${String(newHours).padStart(2, '0')}:${String(newMins).padStart(2, '0')}`;
+
+                    cancelEditDuration(taskId);
+                } else {
+                    const err = await res.json();
+                    alert('Error: ' + (err.error || 'Failed to update duration'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Connection error. Please try again.');
+            }
+        }
+
+        // Allow Enter to save, Escape to cancel
+        document.addEventListener('keydown', function (e) {
+            const activeInput = document.activeElement;
+            if (activeInput && activeInput.classList.contains('duration-edit')) {
+                const taskId = activeInput.id.replace('duration-edit-', '');
+                if (e.key === 'Enter') {
+                    saveDuration(taskId);
+                } else if (e.key === 'Escape') {
+                    cancelEditDuration(taskId);
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

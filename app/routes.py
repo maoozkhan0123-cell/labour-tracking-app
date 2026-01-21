@@ -133,7 +133,7 @@ def control_matrix():
     
     # 2. Get Active/Paused Tasks for the Matrix cells
     tasks = Task.get_all()
-    filtered_tasks = [t for t in tasks if t.status in ['active', 'break', 'pending', 'clocked_out', 'Active', 'Break', 'Pending']]
+    filtered_tasks = [t for t in tasks if t.status in ['active', 'break', 'pending', 'clocked_out', 'clocked_in', 'Active', 'Break', 'Pending', 'Clocked_In']]
     
     # 3. Get MOs from Firestore - sorted by ID
     mos_stream = db.collection('manufacturing_orders').order_by('id').stream()
@@ -169,6 +169,28 @@ def control_matrix():
                           mos=mos,
                           tasks=[t.to_dict() for t in filtered_tasks],
                           operations=operations)
+
+@main_bp.route('/control-table')
+@login_required
+def control_table():
+    if current_user.role != 'manager':
+        return redirect(url_for('main.index'))
+        
+    db = firestore.client()
+    # Get Employees
+    employees_stream = db.collection('users').where('role', '==', 'employee').stream()
+    employees = [User(id=doc.id, **doc.to_dict()) for doc in employees_stream]
+    emp_map = {e.id: e for e in employees}
+    
+    # Get all tasks
+    tasks = Task.get_all()
+    filtered_tasks = [t for t in tasks if t.status in ['active', 'break', 'pending', 'clocked_out', 'clocked_in', 'Active', 'Break', 'Pending', 'Clocked_In', 'Clocked_Out']]
+    
+    return render_template('control_table.html',
+                          employees=[e.to_dict() for e in employees],
+                          emp_map={e.id: e.to_dict() for e in employees},
+                          tasks=[t.to_dict() for t in filtered_tasks])
+
 
 @main_bp.route('/manufacturing-orders')
 @login_required
@@ -702,10 +724,31 @@ def task_action(task_id):
     diff = int((now - last_act).total_seconds()) if last_act else 0
     if diff < 0: diff = 0
 
-    if action == 'clock_in' or action == 'start' or action == 'resume':
-        # From Pending/Clocked_Out -> Active: Start/Resume timer
-        # From Break -> Active: Resume timer (close break)
+    if action == 'clock_in':
+        # Clock In: Worker arrives, but timer doesn't start yet
+        updates['status'] = 'clocked_in'
+        updates['last_action_time'] = now
         
+    elif action == 'start':
+        # Start: Begin timer (from clocked_in or pending)
+        if current_status == 'clocked_in':
+            # Already clocked in, just start the timer
+            pass
+        updates['status'] = 'active'
+        updates['last_action_time'] = now
+        if not task_data.get('start_time'):
+            updates['start_time'] = now
+            
+    elif action == 'stop':
+        # Stop: Pause timer (from active to clocked_in)
+        if current_status == 'active':
+            current_act = task_data.get('active_seconds', 0)
+            updates['active_seconds'] = current_act + diff
+        updates['status'] = 'clocked_in'
+        updates['last_action_time'] = now
+        
+    elif action == 'resume':
+        # Resume: Restart timer after break
         if current_status == 'break':
             current_brk = task_data.get('break_seconds', 0)
             updates['break_seconds'] = current_brk + diff
@@ -714,13 +757,12 @@ def task_action(task_id):
             breaks_query = task_ref.collection('breaks').order_by('start_time', direction=firestore.Query.DESCENDING).limit(1)
             for b in breaks_query.stream():
                 b.reference.update({'end_time': now})
-
+        
         updates['status'] = 'active'
         updates['last_action_time'] = now
-        if not task_data.get('start_time'):
-            updates['start_time'] = now
 
-    elif action == 'clock_out': # Partial day end (Shift End), Task NOT Complete
+    elif action == 'clock_out':
+        # Clock Out: End shift (from any status)
         if current_status == 'active':
             current_act = task_data.get('active_seconds', 0)
             updates['active_seconds'] = current_act + diff
@@ -732,6 +774,7 @@ def task_action(task_id):
         updates['last_action_time'] = now
 
     elif action == 'break':
+        # Break: Pause for break
         if current_status == 'active':
             current_act = task_data.get('active_seconds', 0)
             updates['active_seconds'] = current_act + diff
@@ -745,7 +788,8 @@ def task_action(task_id):
             'start_time': now
         })
 
-    elif action == 'complete': # Stop Button (Finalize Task)
+    elif action == 'complete':
+        # Complete: Finalize task
         if current_status == 'active':
             current_act = task_data.get('active_seconds', 0)
             updates['active_seconds'] = current_act + diff
@@ -765,6 +809,34 @@ def task_action(task_id):
     return jsonify({'success': True})
 
 
+@main_bp.route('/api/task/<task_id>/edit_time', methods=['POST'])
+@login_required
+def edit_task_time(task_id):
+    """Allow managers to manually edit task duration"""
+    if current_user.role != 'manager':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    data = request.json
+    active_seconds = data.get('active_seconds')
+    
+    if active_seconds is None or active_seconds < 0:
+        return jsonify({'error': 'Invalid duration'}), 400
+    
+    db = firestore.client()
+    task_ref = db.collection('tasks').document(task_id)
+    task_doc = task_ref.get()
+    
+    if not task_doc.exists:
+        return jsonify({'error': 'Task not found'}), 404
+    
+    # Update the active_seconds field
+    task_ref.update({
+        'active_seconds': int(active_seconds)
+    })
+    
+    return jsonify({'success': True, 'active_seconds': int(active_seconds)})
+
+
 @main_bp.route('/api/update_employee_rate', methods=['POST'])
 @login_required
 def update_employee_rate():
@@ -776,6 +848,20 @@ def update_employee_rate():
         'hourly_rate': float(data['hourly_rate'])
     })
     return jsonify({'success': True})
+
+@main_bp.route('/api/tasks')
+@login_required
+def get_tasks():
+    if current_user.role != 'manager':
+        return jsonify({'error': 'Unauthorized'}), 403
+    
+    tasks = Task.get_all()
+    filtered_tasks = [t for t in tasks if t.status in ['active', 'break', 'pending', 'clocked_out', 'clocked_in', 'Active', 'Break', 'Pending', 'Clocked_In', 'Clocked_Out']]
+    
+    return jsonify({
+        'tasks': [t.to_dict() for t in filtered_tasks]
+    })
+
 
 
 @main_bp.route('/api/hire_employee', methods=['POST'])

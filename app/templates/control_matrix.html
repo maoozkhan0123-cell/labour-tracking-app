@@ -34,6 +34,9 @@
             <li><a href="{{ url_for('main.control_matrix') }}" class="nav-item active">
                     <i class="fa-solid fa-table-cells"></i> <span>Control Matrix</span>
                 </a></li>
+            <li><a href="{{ url_for('main.control_table') }}" class="nav-item">
+                    <i class="fa-solid fa-table-list"></i> <span>Control Table</span>
+                </a></li>
             <li><a href="{{ url_for('main.manufacturing_orders') }}" class="nav-item">
                     <i class="fa-regular fa-clipboard"></i> <span>Manufacturing Orders</span>
                 </a></li>
@@ -111,7 +114,15 @@
                     {% endif %}
                     {% endfor %}
 
-                    <div class="matrix-cell {% if cell_tasks %}active-cell{% endif %}"
+                    <!-- Check if any task has active timer using namespace -->
+                    {% set ns = namespace(has_active=false) %}
+                    {% for t in cell_tasks %}
+                    {% if t.status == 'active' %}
+                    {% set ns.has_active = true %}
+                    {% endif %}
+                    {% endfor %}
+
+                    <div class="matrix-cell {% if cell_tasks %}active-cell{% endif %} {% if ns.has_active %}timer-running{% endif %}"
                         onclick="openAssign('{{ mo.name }}', '{{ op }}')">
                         {% if cell_tasks %}
                         <div style="display:flex; flex-direction:column; justify-content:space-between; height:100%;">
@@ -122,15 +133,6 @@
                                     {{ cell_tasks|length }} workers
                                 </div>
                             </div>
-
-                            {% set has_active = false %}
-                            {% for t in cell_tasks %}
-                            {% if t.status == 'active' %}
-                            {% set has_active = true %}
-                            {% endif %}
-                            {% endfor %}
-
-
 
                             <div style="display:flex; align-items:center; margin-top:8px;">
                                 {% for t in cell_tasks[:3] %}
@@ -663,18 +665,22 @@
                 const statusStr = (task.status || 'pending').toLowerCase();
                 const isPending = statusStr === 'pending';
                 const isClockedOut = statusStr === 'clocked_out';
+                const isClockedIn = statusStr === 'clocked_in';
                 const isActive = statusStr === 'active';
                 const isBreak = statusStr === 'break';
 
                 let statusLabel = 'PENDING';
                 let statusClass = 'pill-pending'; // gray
-                if (isActive) { statusLabel = 'CLOCKED IN'; statusClass = 'pill-running'; }
+                if (isActive) { statusLabel = 'TIMER RUNNING'; statusClass = 'pill-running'; }
+                else if (isClockedIn) { statusLabel = 'CLOCKED IN'; statusClass = 'pill-pending'; }
                 else if (isBreak) { statusLabel = 'PAUSED'; statusClass = 'pill-paused'; }
                 else if (isClockedOut) { statusLabel = 'CLOCKED OUT'; statusClass = 'pill-paused'; }
 
                 // Toolbar Button Logic
                 const showClockIn = isPending || isClockedOut;
-                const showClockOut = isActive || isBreak;
+                const showStart = isClockedIn;
+                const showStop = isActive;
+                const showClockOut = isClockedIn || isActive || isBreak;
                 const showPause = isActive;
                 const showResume = isBreak;
 
@@ -684,6 +690,20 @@
                     toolbarHtml += `
                         <button class="toolbar-btn btn-play" onclick="performTaskAction('${task.id}', 'clock_in')" title="Clock In">
                             <span style="font-weight:600; font-size:0.8rem; margin-left:2px;">Clock In</span> <i class="fa-solid fa-arrow-right-to-bracket" style="margin-left:6px;"></i>
+                        </button>`;
+                }
+
+                if (showStart) {
+                    toolbarHtml += `
+                        <button class="toolbar-btn btn-play" onclick="performTaskAction('${task.id}', 'start')" title="Start Timer">
+                            <span style="font-weight:600; font-size:0.8rem; margin-left:2px;">Start</span> <i class="fa-solid fa-play" style="margin-left:6px;"></i>
+                        </button>`;
+                }
+
+                if (showStop) {
+                    toolbarHtml += `
+                        <button class="toolbar-btn btn-pause" onclick="performTaskAction('${task.id}', 'stop')" title="Stop Timer">
+                            <span style="font-weight:600; font-size:0.8rem; margin-left:2px;">Stop</span> <i class="fa-solid fa-stop" style="margin-left:6px;"></i>
                         </button>`;
                 }
 
@@ -709,8 +729,8 @@
                 }
 
                 // Stop Button (Finalize Task)
-                const showStop = !isPending;
-                if (showStop) {
+                const showComplete = !isPending;
+                if (showComplete) {
                     toolbarHtml += `
                         <div style="width: 1px; height: 20px; background: #E2E8F0; margin: 0 4px;"></div>
                         <button class="toolbar-btn btn-stop" onclick="performTaskAction('${task.id}', 'complete')" title="Complete Task">
@@ -805,7 +825,16 @@
                 });
 
                 if (res.ok) {
-                    location.reload();
+                    // Fetch updated tasks and re-render
+                    const tasksRes = await fetch('/api/tasks');
+                    if (tasksRes.ok) {
+                        const data = await tasksRes.json();
+                        allPendingTasks.length = 0;
+                        allPendingTasks.push(...data.tasks);
+                        renderAssignedWorkers();
+                        // Reset the select
+                        selectWorker('', 'Select a worker...', '0');
+                    }
                 }
             } catch (e) { console.error(e); }
         }
@@ -872,7 +901,21 @@
                     body: JSON.stringify(body)
                 });
                 if (res.ok) {
-                    location.reload();
+                    // Close pause modal if it was open
+                    if (action === 'break') {
+                        closePauseModal();
+                    }
+                    // Fetch updated tasks and re-render
+                    const tasksRes = await fetch('/api/tasks');
+                    if (tasksRes.ok) {
+                        const data = await tasksRes.json();
+                        allPendingTasks.length = 0;
+                        allPendingTasks.push(...data.tasks);
+                        renderAssignedWorkers();
+
+                        // Update matrix cell colors dynamically
+                        updateMatrixCellColors(data.tasks);
+                    }
                 } else {
                     const err = await res.json();
                     alert('Error: ' + (err.error || 'Failed to perform action'));
@@ -881,6 +924,35 @@
                 console.error(e);
                 alert('Connection error. Please try again.');
             }
+        }
+
+        function updateMatrixCellColors(tasks) {
+            // Group tasks by MO and Operation
+            const cellMap = {};
+            tasks.forEach(task => {
+                const key = `${task.mo_reference}|||${task.description}`;
+                if (!cellMap[key]) cellMap[key] = [];
+                cellMap[key].push(task);
+            });
+
+            // Update each cell's class
+            document.querySelectorAll('.matrix-cell').forEach(cell => {
+                const moName = cell.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+                const opName = cell.getAttribute('onclick')?.match(/'([^']+)',\s*'([^']+)'/)?.[2];
+
+                if (moName && opName) {
+                    const key = `${moName}|||${opName}`;
+                    const cellTasks = cellMap[key] || [];
+                    const hasActive = cellTasks.some(t => t.status === 'active');
+
+                    // Update classes
+                    if (hasActive) {
+                        cell.classList.add('timer-running');
+                    } else {
+                        cell.classList.remove('timer-running');
+                    }
+                }
+            });
         }
 
         async function deleteTask(taskId) {
@@ -892,7 +964,14 @@
                     headers: { 'Content-Type': 'application/json' }
                 });
                 if (res.ok) {
-                    location.reload();
+                    // Fetch updated tasks and re-render
+                    const tasksRes = await fetch('/api/tasks');
+                    if (tasksRes.ok) {
+                        const data = await tasksRes.json();
+                        allPendingTasks.length = 0;
+                        allPendingTasks.push(...data.tasks);
+                        renderAssignedWorkers();
+                    }
                 } else {
                     alert('Error removing task');
                 }

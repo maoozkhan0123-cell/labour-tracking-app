@@ -510,9 +510,16 @@ body {
 }
 
 .matrix-cell.active-cell {
-    background: #ECFDF5;
-    border-color: var(--success);
+    background: #FEE2E2;
+    border-color: #FCA5A5 !important;
+
 }
+
+.matrix-cell.active-cell.timer-running {
+    background: #ECFDF5 !important;
+    border-color: #09dd7a !important;
+}
+
 
 .matrix-cell-empty {
     display: flex;
