@@ -68,6 +68,42 @@
         </div>
 
         <!-- Control Table Section -->
+
+        <!-- Filters Toolbar -->
+        <div
+            style="margin-bottom: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; background: white; padding: 1rem; border-radius: 12px; border: 1px solid #E2E8F0;">
+            <div style="flex: 1; min-width: 200px; position: relative;">
+                <i class="fa-solid fa-magnifying-glass"
+                    style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94A3B8;"></i>
+                <input type="text" id="searchInput" onkeyup="filterTable()"
+                    placeholder="Search MO, Operation, or Worker..."
+                    style="width: 100%; padding: 0.6rem 1rem 0.6rem 2.25rem; border-radius: 8px; border: 1px solid #CBD5E1; outline: none;">
+            </div>
+
+            <select id="workerFilter" onchange="filterTable()"
+                style="padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #CBD5E1; outline: none; background: white;">
+                <option value="all">All Workers</option>
+                {% for emp in employees %}
+                <option value="{{ emp.name }}">{{ emp.name }}</option>
+                {% endfor %}
+            </select>
+
+            <select id="statusFilter" onchange="filterTable()"
+                style="padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #CBD5E1; outline: none; background: white;">
+                <option value="all">All Statuses</option>
+                <option value="timer running">Timer Running</option>
+                <option value="clocked in">Clocked In</option>
+                <option value="on break">On Break</option>
+                <option value="completed">Completed</option>
+                <option value="pending">Pending</option>
+            </select>
+
+            <button onclick="resetFilters()"
+                style="padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #E2E8F0; background: white; color: #64748B; cursor: pointer;">
+                Reset
+            </button>
+        </div>
+
         <div class="section-card">
             <div style="overflow-x: auto;">
                 <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
@@ -285,6 +321,56 @@
                 }
             }
         });
+        // Filter Logic
+        function filterTable() {
+            const searchShort = document.getElementById('searchInput').value.toLowerCase();
+            const workerFilter = document.getElementById('workerFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            const rows = document.querySelectorAll('tbody tr');
+
+            rows.forEach(row => {
+                const workerName = row.querySelector('td:nth-child(1)').innerText.trim();
+                const moRef = row.querySelector('td:nth-child(2)').innerText.toLowerCase();
+                const opDesc = row.querySelector('td:nth-child(3)').innerText.toLowerCase();
+                const statusText = row.querySelector('td:nth-child(7)').innerText.toLowerCase().trim();
+
+                // Check Worker
+                if (workerFilter !== 'all' && !workerName.includes(workerFilter)) {
+                    row.style.display = 'none';
+                    return;
+                }
+
+                // Check Status
+                // "completed" logic: if filter is completed, match 'completed'
+                // the badges usually say 'TIMER RUNNING', 'CLOCKED IN', 'PENDING'
+                if (statusFilter !== 'all') {
+                    if (!statusText.includes(statusFilter)) {
+                        row.style.display = 'none';
+                        return;
+                    }
+                }
+
+                // Check Search (MO, Op, Worker)
+                if (searchShort) {
+                    const match = moRef.includes(searchShort) || opDesc.includes(searchShort) || workerName.toLowerCase().includes(searchShort);
+                    if (!match) {
+                        row.style.display = 'none';
+                        return;
+                    }
+                }
+
+                row.style.display = 'table-row';
+            });
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('workerFilter').value = 'all';
+            document.getElementById('statusFilter').value = 'all';
+            filterTable();
+        }
+
     </script>
 </body>
 

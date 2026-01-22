@@ -812,6 +812,7 @@
 
             const option = select.options[select.selectedIndex];
             const rate = option.dataset.rate;
+            const empName = option.text;
 
             try {
                 const res = await fetch('/api/assign_task', {
@@ -825,16 +826,25 @@
                 });
 
                 if (res.ok) {
-                    // Fetch updated tasks and re-render
-                    const tasksRes = await fetch('/api/tasks');
-                    if (tasksRes.ok) {
-                        const data = await tasksRes.json();
-                        allPendingTasks.length = 0;
-                        allPendingTasks.push(...data.tasks);
-                        renderAssignedWorkers();
-                        // Reset the select
-                        selectWorker('', 'Select a worker...', '0');
+                    const data = await res.json();
+
+                    // Optimistic / Instant Update
+                    // We can use the tasks returned by backend if available, or create local one
+                    if (data.new_tasks && data.new_tasks.length > 0) {
+                        allPendingTasks.push(...data.new_tasks);
+                    } else {
+                        // Fallback: reload all
+                        const tasksRes = await fetch('/api/tasks');
+                        if (tasksRes.ok) {
+                            const d = await tasksRes.json();
+                            allPendingTasks.length = 0;
+                            allPendingTasks.push(...d.tasks);
+                        }
                     }
+
+                    renderAssignedWorkers();
+                    // Reset the select
+                    selectWorker('', 'Select a worker...', '0');
                 }
             } catch (e) { console.error(e); }
         }

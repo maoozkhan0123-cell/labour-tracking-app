@@ -21,7 +21,7 @@ def get_person_summary(employees, tasks):
         return dt
 
     for emp in employees:
-        emp_tasks = [t for t in tasks if t.assigned_to_id == emp.id]
+        emp_tasks = [t for t in tasks if str(t.assigned_to_id) == str(emp.id)]
         active_sec = sum(t.active_seconds or 0 for t in emp_tasks)
         break_sec = sum(t.break_seconds or 0 for t in emp_tasks)
 
@@ -186,7 +186,7 @@ def control_table():
     
     # Get all tasks
     tasks = Task.get_all()
-    filtered_tasks = [t for t in tasks if t.status in ['active', 'break', 'pending', 'clocked_out', 'clocked_in', 'Active', 'Break', 'Pending', 'Clocked_In', 'Clocked_Out']]
+    filtered_tasks = [t for t in tasks if t.status in ['active', 'break', 'pending', 'clocked_out', 'clocked_in', 'completed', 'Active', 'Break', 'Pending', 'Clocked_In', 'Clocked_Out', 'Completed']]
     
     return render_template('control_table.html',
                           employees=[e.to_dict() for e in employees],
@@ -482,6 +482,7 @@ def reports():
     mo_ref = request.args.get('mo')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
+    operation = request.args.get('operation')
     
     # Fetch all data for filters
     employees_stream = db.collection('users').where('role', '==', 'employee').stream()
@@ -506,12 +507,15 @@ def reports():
     
     for t in tasks:
         # Status must be completed or manual for reports
-        if t.status not in ['completed']:
+        status_norm = (t.status or '').lower()
+        if status_norm != 'completed':
             continue
             
-        if emp_id and emp_id != 'all' and t.assigned_to_id != emp_id:
+        if emp_id and emp_id != 'all' and str(t.assigned_to_id) != str(emp_id):
             continue
         if mo_ref and mo_ref != 'all' and t.mo_reference != mo_ref:
+            continue
+        if operation and operation != 'all' and t.description != operation:
             continue
             
         # Date filtering (created_at is a string in Task.to_dict() but we might need more)
@@ -560,7 +564,7 @@ def reports():
                           avg_rate=round(avg_rate, 2),
                           hours_by_worker=hours_by_worker,
                           hours_by_op=hours_by_op,
-                          filters={'employee': emp_id, 'mo': mo_ref, 'start': start_date, 'end': end_date})
+                          filters={'employee': emp_id, 'mo': mo_ref, 'operation': operation, 'start': start_date, 'end': end_date})
 
 
 
@@ -578,6 +582,7 @@ def export_reports_csv():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     operation = request.args.get('operation')
+    operation = request.args.get('operation')
     
     # Fetch data (simplified replication of reports logic)
     employees_stream = db.collection('users').where('role', '==', 'employee').stream()
@@ -594,9 +599,12 @@ def export_reports_csv():
     writer.writerow(['Worker', 'Order', 'Operation', 'Start Time', 'Duration (Hours)', 'Duration (Mins)', 'Type', 'Cost', 'Hourly Rate'])
     
     for t in tasks:
-        if t.status != 'completed': continue
+        # Status filter - case insensitive
+        status_norm = (t.status or '').lower()
+        if status_norm != 'completed': continue
         
-        if emp_id and emp_id != 'all' and t.assigned_to_id != emp_id: continue
+        # Safe string comparison for IDs
+        if emp_id and emp_id != 'all' and str(t.assigned_to_id) != str(emp_id): continue
         if mo_ref and mo_ref != 'all' and t.mo_reference != mo_ref: continue
         if operation and operation != 'all' and t.description != operation: continue
         
@@ -607,7 +615,7 @@ def export_reports_csv():
             e_dt = datetime.strptime(end_date, '%Y-%m-%d')
             if t.created_at and t.created_at.replace(tzinfo=None) > e_dt: continue
             
-        worker_name = employees.get(t.assigned_to_id, 'Unknown')
+        worker_name = employees.get(str(t.assigned_to_id), 'Unknown')
         duration_hours = (t.active_seconds or 0) / 3600.0
         cost = duration_hours * t.hourly_rate
         
@@ -655,6 +663,7 @@ def assign_task():
     if not assignments:
         return jsonify({'error': 'No employees selected'}), 400
 
+    new_tasks = []
     batch = db.batch()
     for assign in assignments:
         task_id = str(uuid.uuid4())
@@ -679,9 +688,16 @@ def assign_task():
             'created_at': firestore.SERVER_TIMESTAMP
         }
         batch.set(task_ref, task_data)
+        
+        # Prepare data for frontend return (timestamp needs stringifying if instant)
+        ret_data = task_data.copy()
+        ret_data['id'] = task_id
+        # Remove server timestamp for immediate frontend use (date mismatch acceptable for split second)
+        del ret_data['created_at'] 
+        new_tasks.append(ret_data)
 
     batch.commit()
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'new_tasks': new_tasks})
 
 # --- Administrative Actions ---
 
@@ -898,3 +914,4 @@ def delete_employee():
     db = firestore.client()
     db.collection('users').document(data['employee_id']).delete()
     return jsonify({'success': True})
+

@@ -103,7 +103,8 @@
                         style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border); background: #F8FAFC;">
                         <option value="all">All Orders</option>
                         {% for mo in mos %}
-                        <option value="{{ mo.id }}" {% if filters.mo==mo.id %}selected{% endif %}>{{ mo.name }}</option>
+                        <option value="{{ mo.name }}" {% if filters.mo==mo.name %}selected{% endif %}>{{ mo.name }}
+                        </option>
                         {% endfor %}
                     </select>
                 </div>
