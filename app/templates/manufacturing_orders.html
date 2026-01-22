@@ -188,19 +188,19 @@
                 <tbody>
                     {% for order in orders %}
                     <tr>
-                        <td style="font-weight: 600; color: var(--primary);">{{ order.id }}</td>
+                        <td style="font-weight: 600; color: var(--primary);">{{ order.name }}</td>
                         <td style="font-weight: 600;">{{ order.product }}</td>
                         <td><span class="badge badge-{{ order.status }}">{{ order.status }}</span></td>
                         <td style="color: var(--text-muted); font-size: 0.9rem;"><i class="fa-regular fa-calendar"
                                 style="margin-right: 6px;"></i> {{ order.dates }}</td>
                         <td style="text-align: right;">
-                            <a href="{{ url_for('main.control_matrix') }}#mo-{{ order.id }}" class="icon-btn"
+                            <a href="{{ url_for('main.control_matrix') }}#mo-{{ order.name }}" class="icon-btn"
                                 title="View Matrix"
                                 style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">
                                 <i class="fa-solid fa-table-cells"></i> Matrix
                             </a>
                             <button class="icon-btn" title="Edit"
-                                onclick="openEditModal('{{ order.id }}', '{{ order.product }}', '{{ order.status }}')"><i
+                                onclick="openEditModal('{{ order.id }}', '{{ order.name }}', '{{ order.product }}', '{{ order.status }}')"><i
                                     class="fa-solid fa-pen"></i></button>
                             <button class="icon-btn delete" title="Delete" onclick="deleteOrder('{{ order.id }}')"><i
                                     class="fa-regular fa-trash-can"></i></button>
@@ -224,7 +224,8 @@
                 <div>
                     <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #475569;">MO
                         ID</label>
-                    <input type="text" id="edit_mo_id" disabled
+                    <input type="hidden" id="edit_mo_doc_id">
+                    <input type="text" id="edit_mo_name" disabled
                         style="width: 100%; padding: 0.75rem; border-radius: 8px; border: 1.5px solid var(--border); background: #F8FAFC; color: #64748B;">
                 </div>
                 <div>
@@ -311,8 +312,9 @@
             } catch (e) { console.error(e); }
         }
 
-        function openEditModal(id, product, status) {
-            document.getElementById('edit_mo_id').value = id;
+        function openEditModal(id, name, product, status) {
+            document.getElementById('edit_mo_doc_id').value = id;
+            document.getElementById('edit_mo_name').value = name;
             document.getElementById('edit_product').value = product;
             document.getElementById('edit_status').value = status;
 
@@ -328,7 +330,7 @@
         }
 
         async function updateOrder() {
-            const id = document.getElementById('edit_mo_id').value;
+            const id = document.getElementById('edit_mo_doc_id').value;
             const product = document.getElementById('edit_product').value;
             const status = document.getElementById('edit_status').value;
             const start = document.getElementById('edit_start').value;

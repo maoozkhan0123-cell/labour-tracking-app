@@ -141,7 +141,7 @@ def control_matrix():
     for doc in mos_stream:
         data = doc.to_dict()
         mos.append({
-            'name': doc.id,  # Use document ID as the MO name
+            'name': data.get('name', doc.id),  # Use name field, fallback to doc ID
             'product_id': [0, data.get('product', 'N/A')],
             'state': data.get('status', 'draft')
         })
@@ -206,6 +206,9 @@ def manufacturing_orders():
     for doc in mos_stream:
         d = doc.to_dict()
         d['id'] = doc.id
+        d['id'] = doc.id
+        if 'name' not in d:
+            d['name'] = doc.id
         orders.append(d)
             
     return render_template('manufacturing_orders.html', orders=orders)
@@ -303,12 +306,16 @@ def add_order():
     data = request.json
     db = firestore.client()
 
-    # Use provided ID
-    mo_id = data.get('id')
-    if not mo_id:
-        return jsonify({'success': False, 'error': 'ID is required'}), 400
+    # Use provided ID as name
+    mo_name = data.get('id')
+    if not mo_name:
+        return jsonify({'success': False, 'error': 'Name is required'}), 400
 
-    db.collection('manufacturing_orders').document(mo_id).set({
+    # Create document with auto-ID to allow any characters in name (slashes, etc)
+    new_doc_ref = db.collection('manufacturing_orders').document()
+    
+    new_doc_ref.set({
+        'name': mo_name,
         'product': data.get('product', 'Unknown Product'),
         'status': 'draft',
         'dates': data.get('dates', datetime.utcnow().strftime('%b %d → %b %d')),
