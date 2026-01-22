@@ -136,15 +136,17 @@ def control_matrix():
     filtered_tasks = [t for t in tasks if t.status in ['active', 'break', 'pending', 'clocked_out', 'clocked_in', 'Active', 'Break', 'Pending', 'Clocked_In']]
     
     # 3. Get MOs from Firestore - sorted by ID
-    mos_stream = db.collection('manufacturing_orders').order_by('id').stream()
+    mos_stream = db.collection('manufacturing_orders').stream()
     mos = []
     for doc in mos_stream:
         data = doc.to_dict()
         mos.append({
-            'name': str(data.get('id', doc.id)),
+            'name': doc.id,  # Use document ID as the MO name
             'product_id': [0, data.get('product', 'N/A')],
             'state': data.get('status', 'draft')
         })
+    # Sort by name after fetching
+    mos.sort(key=lambda x: x['name'])
     
     # 4. Get Operations from Firestore
     ops_ref = db.collection('settings').document('operations')
@@ -205,18 +207,6 @@ def manufacturing_orders():
         d = doc.to_dict()
         d['id'] = doc.id
         orders.append(d)
-    
-    if not orders:
-        # Initial seeding if empty
-        orders = [
-            {'id': 'MO-001', 'product': 'Industrial Motor Assembly', 'status': 'progress', 'dates': 'Jan 15 → Feb 15', 'created_at': datetime.utcnow()},
-            {'id': 'MO-002', 'product': 'Control Panel Unit', 'status': 'progress', 'dates': 'Jan 20 → Feb 20', 'created_at': datetime.utcnow()},
-            {'id': 'MO-003', 'product': 'Hydraulic Pump Kit', 'status': 'draft', 'dates': 'Feb 1 → Mar 1', 'created_at': datetime.utcnow()},
-            {'id': 'MO-004', 'product': 'Sensor Array Module', 'status': 'completed', 'dates': 'Jan 1 → Jan 14', 'created_at': datetime.utcnow()},
-            {'id': 'MO-005', 'product': 'Conveyor Belt Section', 'status': 'draft', 'dates': 'Feb 10 → Mar 10', 'created_at': datetime.utcnow()},
-        ]
-        for o in orders:
-            db.collection('manufacturing_orders').document(o['id']).set(o)
             
     return render_template('manufacturing_orders.html', orders=orders)
 
@@ -313,11 +303,12 @@ def add_order():
     data = request.json
     db = firestore.client()
 
-    # Simple ID generation or use provided ID
-    mo_id = data.get('id', str(uuid.uuid4())[:8].upper())
+    # Use provided ID
+    mo_id = data.get('id')
+    if not mo_id:
+        return jsonify({'success': False, 'error': 'ID is required'}), 400
 
     db.collection('manufacturing_orders').document(mo_id).set({
-        'id': mo_id,
         'product': data.get('product', 'Unknown Product'),
         'status': 'draft',
         'dates': data.get('dates', datetime.utcnow().strftime('%b %d → %b %d')),
