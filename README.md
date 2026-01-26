@@ -14,7 +14,7 @@ A premium, minimalistic labor tracking and payroll management system. This appli
 ## 🛠️ Technology Stack
 
 - **Backend**: Python / Flask
-- **Database**: Google Cloud Firestore (Firebase)
+- **Database**: Supabase (PostgreSQL)
 - **Frontend**: HTML5, Vanilla CSS3 (Custom Design System), JavaScript (ES6+)
 - **Icons**: Font Awesome 6
 - **Deployment**: Optimized for Vercel
@@ -34,7 +34,8 @@ A premium, minimalistic labor tracking and payroll management system. This appli
    ```
 
 3. **Configure Environment**:
-   Create a `.env` file based on `.env.example` and provide your Firebase credentials.
+   Create a `.env` file based on `.env.example` and provide your Supabase credentials.
+   See `SUPABASE_MIGRATION.md` for detailed setup instructions.
 
 4. **Run the application**:
    ```bash
@@ -49,7 +50,7 @@ A premium, minimalistic labor tracking and payroll management system. This appli
 
 1. Install Vercel CLI: `npm i -g vercel`
 2. Run `vercel` in the root directory.
-3. Configure `FIREBASE_CONFIG` as an environment variable in the Vercel dashboard.
+3. Configure `SUPABASE_URL` and `SUPABASE_KEY` as environment variables in the Vercel dashboard.
 
 ## 🧱 Project Structure
 

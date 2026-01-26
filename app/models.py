@@ -1,20 +1,31 @@
 from flask_login import UserMixin
 from datetime import datetime
-from firebase_admin import firestore
+from .supabase_client import get_supabase
+import uuid
+import pytz
+from datetime import datetime
+
+# Define PST timezone
+PST = pytz.timezone('America/Los_Angeles')
+
+def get_now_pst():
+    return datetime.now(pytz.utc).astimezone(PST)
 
 
 class User(UserMixin):
     def __init__(self, id, **kwargs):
-        self.id = id
+        self.id = str(id)
+        self.worker_id = kwargs.get('worker_id', '')
         self.username = kwargs.get('username', '')
         self.password = kwargs.get('password', '')
         self.role = kwargs.get('role', 'employee')
         self.name = kwargs.get('name', '')
-        self.hourly_rate = kwargs.get('hourly_rate', 0.0)
+        self.hourly_rate = float(kwargs.get('hourly_rate', 0.0) or 0.0)
 
     def to_dict(self):
         return {
             'id': self.id,
+            'worker_id': self.worker_id,
             'username': self.username,
             'role': self.role,
             'name': self.name,
@@ -25,48 +36,56 @@ class User(UserMixin):
     def get(user_id):
         if not user_id:
             return None
-        db = firestore.client()
-        user_doc = db.collection('users').document(str(user_id)).get()
-        if user_doc.exists:
-            data = user_doc.to_dict()
-            return User(id=user_doc.id, **data)
+        supabase = get_supabase()
+        if not supabase: return None
+        
+        response = supabase.table('users').select("*").eq("id", str(user_id)).execute()
+        if response.data:
+            data = response.data[0]
+            return User(**data)
         return None
 
     @staticmethod
     def find_by_username(username):
-        db = firestore.client()
-        users = db.collection('users').where('username', '==', username).stream()
-        for user in users:
-            data = user.to_dict()
-            return User(id=user.id, **data)
+        supabase = get_supabase()
+        if not supabase: return None
+        
+        response = supabase.table('users').select("*").eq("username", username).execute()
+        if response.data:
+            data = response.data[0]
+            return User(**data)
         return None
 
 
 class Task:
     def __init__(self, id, **kwargs):
-        self.id = id
+        self.id = str(id)
         self.description = kwargs.get('description', '')
         self.mo_reference = kwargs.get('mo_reference', 'N/A')
-        self.assigned_to_id = kwargs.get('assigned_to_id', '')
+        self.assigned_to_id = str(kwargs.get('assigned_to_id', ''))
         self.status = kwargs.get('status', 'pending')
-        self.hourly_rate = kwargs.get('hourly_rate', 0.0)
+        self.hourly_rate = float(kwargs.get('hourly_rate', 0.0) or 0.0)
         self.manual = kwargs.get('manual', False)
         self.reason = kwargs.get('reason', '')
-        self.active_seconds = kwargs.get('active_seconds', 0)
-        self.break_seconds = kwargs.get('break_seconds', 0)
-        self.total_duration_seconds = kwargs.get('total_duration_seconds', 0)
+        self.active_seconds = int(kwargs.get('active_seconds', 0) or 0)
+        self.break_seconds = int(kwargs.get('break_seconds', 0) or 0)
+        self.total_duration_seconds = int(kwargs.get('total_duration_seconds', 0) or 0)
 
-        # Helper to convert Firestore timestamps to naive UTC datetimes
+        # Helper to convert Supabase/ISO timestamps to naive PST datetimes
         def to_dt(val):
             if not val:
                 return None
-            if hasattr(val, 'to_datetime'):
-                return val.to_datetime().replace(tzinfo=None)
             if isinstance(val, (int, float)):
-                return datetime.fromtimestamp(val)
+                dt = datetime.fromtimestamp(val, tz=pytz.utc)
+                return dt.astimezone(PST).replace(tzinfo=None)
             if isinstance(val, str):
                 try:
-                    return datetime.fromisoformat(val.replace('Z', ''))
+                    # Handle Supabase format which might have +00:00 or other offsets
+                    # We want to convert to PST and then use naive for simplicity in templates
+                    dt = datetime.fromisoformat(val.replace('Z', '+00:00'))
+                    if dt.tzinfo is None:
+                        dt = pytz.utc.localize(dt)
+                    return dt.astimezone(PST).replace(tzinfo=None)
                 except Exception:
                     return None
             return val
@@ -104,19 +123,26 @@ class Task:
 
     @staticmethod
     def get_all():
-        db = firestore.client()
-        tasks_stream = db.collection('tasks').order_by('created_at', direction=firestore.Query.DESCENDING).stream()
-        return [Task(id=doc.id, **doc.to_dict()) for doc in tasks_stream]
+        supabase = get_supabase()
+        if not supabase: return []
+        
+        response = supabase.table('tasks').select("*").order('created_at', desc=True).execute()
+        return [Task(**doc) for doc in response.data]
 
     @staticmethod
     def get_by_employee(emp_id):
-        db = firestore.client()
-        tasks_stream = db.collection('tasks').where('assigned_to_id', '==', str(emp_id)).stream()
-        tasks = [Task(id=doc.id, **doc.to_dict()) for doc in tasks_stream]
+        supabase = get_supabase()
+        if not supabase: return []
+        
+        response = supabase.table('tasks').select("*").eq('assigned_to_id', str(emp_id)).execute()
+        tasks = [Task(**doc) for doc in response.data]
         return sorted(tasks, key=lambda x: x.created_at if x.created_at else datetime.min, reverse=True)
 
     def save(self):
-        db = firestore.client()
+        supabase = get_supabase()
+        if not supabase: return
+        
         data = self.to_dict()
-        task_id = data.pop('id', self.id)
-        db.collection('tasks').document(task_id).set(data)
+        # Supabase uses 'id' for PK, if it doesn't exist it will insert, otherwise upsert
+        # But we need to handle timestamps back to ISO
+        supabase.table('tasks').upsert(data).execute()

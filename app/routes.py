@@ -1,15 +1,16 @@
 from flask import Blueprint, render_template, jsonify, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
-from .models import User, Task
+from .models import User, Task, get_now_pst, PST
 from datetime import datetime
-from firebase_admin import firestore
+import pytz
+from .supabase_client import get_supabase
 import uuid
 
 main_bp = Blueprint('main', __name__)
 
 def get_person_summary(employees, tasks):
     person_summary = {}
-    now = datetime.utcnow()
+    now = get_now_pst().replace(tzinfo=None)
 
     def to_naive(dt):
         if not dt:
@@ -102,10 +103,10 @@ def manager_dashboard():
     if current_user.role != 'manager':
         return redirect(url_for('main.index'))
 
-    db = firestore.client()
+    supabase = get_supabase()
     # Get all employees
-    employees_stream = db.collection('users').where('role', '==', 'employee').stream()
-    employees = [User(id=doc.id, **doc.to_dict()) for doc in employees_stream]
+    response = supabase.table('users').select("*").eq('role', 'employee').execute()
+    employees = [User(**doc) for doc in response.data]
 
     tasks = Task.get_all()
     person_summary = get_person_summary(employees, tasks)
@@ -125,45 +126,31 @@ def control_matrix():
     if current_user.role != 'manager':
         return redirect(url_for('main.index'))
         
-    db = firestore.client()
+    supabase = get_supabase()
     # 1. Get Employees
-    employees_stream = db.collection('users').where('role', '==', 'employee').stream()
-    employees = [User(id=doc.id, **doc.to_dict()) for doc in employees_stream]
+    response = supabase.table('users').select("*").eq('role', 'employee').execute()
+    employees = [User(**doc) for doc in response.data]
     emp_map = {e.id: e for e in employees}
     
     # 2. Get Active/Paused Tasks for the Matrix cells
     tasks = Task.get_all()
     filtered_tasks = [t for t in tasks if t.status in ['active', 'break', 'pending', 'clocked_out', 'clocked_in', 'Active', 'Break', 'Pending', 'Clocked_In']]
     
-    # 3. Get MOs from Firestore - sorted by ID
-    mos_stream = db.collection('manufacturing_orders').stream()
+    # 3. Get MOs from Supabase - sorted by ID
+    response = supabase.table('manufacturing_orders').select("*").execute()
     mos = []
-    for doc in mos_stream:
-        data = doc.to_dict()
+    for doc in response.data:
         mos.append({
-            'name': data.get('name', doc.id),  # Use name field, fallback to doc ID
-            'product_id': [0, data.get('product', 'N/A')],
-            'state': data.get('status', 'draft')
+            'name': doc.get('name', doc['id']),
+            'product_id': [0, doc.get('product', 'N/A')],
+            'state': doc.get('status', 'draft')
         })
     # Sort by name after fetching
     mos.sort(key=lambda x: x['name'])
     
-    # 4. Get Operations from Firestore
-    ops_ref = db.collection('settings').document('operations')
-    doc = ops_ref.get()
-    if doc.exists:
-        ops_data = doc.to_dict().get('list', [])
-        # Sort operations by ID to guarantee fixed column order in Control Matrix
-        # strictly as requested ("arrangement should not be change")
-        try:
-            ops_data.sort(key=lambda x: int(x['id']))
-            print(f"DEBUG: Sorted operations: {[op['name'] for op in ops_data]}")
-        except Exception as e:
-            print(f"DEBUG: Sort failed: {e}")
-            
-        operations = [op['name'] for op in ops_data]
-    else:
-        operations = [] # Start empty as requested "there is not any predefined operations"
+    # 4. Get Operations from Supabase Table
+    response_ops = supabase.table('operations').select("*").order('sort_order', desc=False).execute()
+    operations = [op['name'] for op in response_ops.data]
         
     return render_template('control_matrix.html',
                           employees=[e.to_dict() for e in employees],
@@ -178,20 +165,57 @@ def control_table():
     if current_user.role != 'manager':
         return redirect(url_for('main.index'))
         
-    db = firestore.client()
-    # Get Employees
-    employees_stream = db.collection('users').where('role', '==', 'employee').stream()
-    employees = [User(id=doc.id, **doc.to_dict()) for doc in employees_stream]
-    emp_map = {e.id: e for e in employees}
+    supabase = get_supabase()
+    # 1. Get Employees
+    response = supabase.table('users').select("*").eq('role', 'employee').execute()
+    employees = [User(**doc) for doc in response.data]
+    emp_map = {e.id: e.to_dict() for e in employees}
     
-    # Get all tasks
+    # 2. Get Manufacturing Orders
+    response_mo = supabase.table('manufacturing_orders').select("*").execute()
+    mos = []
+    for doc in response_mo.data:
+        mos.append({'name': doc.get('name', doc['id'])})
+    mos.sort(key=lambda x: x['name'])
+    
+    # 3. Get Operations
+    response_ops = supabase.table('operations').select("*").order('sort_order', desc=False).execute()
+    operations = response_ops.data
+    
+    # 4. Get all tasks
     tasks = Task.get_all()
-    filtered_tasks = [t for t in tasks if t.status in ['active', 'break', 'pending', 'clocked_out', 'clocked_in', 'completed', 'Active', 'Break', 'Pending', 'Clocked_In', 'Clocked_Out', 'Completed']]
+    
+    # Apply date filters
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    filtered_tasks = []
+    for t in tasks:
+        # Filter Status
+        if t.status not in ['active', 'break', 'pending', 'clocked_out', 'clocked_in', 'completed', 'Active', 'Break', 'Pending', 'Clocked_In', 'Clocked_Out', 'Completed']:
+            continue
+            
+        # Filter Date
+        if start_date:
+            s_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            if t.created_at and t.created_at < s_dt:
+                continue
+        if end_date:
+            e_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            # End of day check
+            e_dt = e_dt.replace(hour=23, minute=59, second=59)
+            if t.created_at and t.created_at > e_dt:
+                continue
+                
+        filtered_tasks.append(t)
     
     return render_template('control_table.html',
                           employees=[e.to_dict() for e in employees],
-                          emp_map={e.id: e.to_dict() for e in employees},
-                          tasks=[t.to_dict() for t in filtered_tasks])
+                          emp_map=emp_map,
+                          mos=mos,
+                          operations=operations,
+                          tasks=filtered_tasks,
+                          filters={'start_date': start_date, 'end_date': end_date})
 
 
 @main_bp.route('/manufacturing-orders')
@@ -200,15 +224,13 @@ def manufacturing_orders():
     if current_user.role != 'manager':
         return redirect(url_for('main.index'))
     
-    db = firestore.client()
-    mos_stream = db.collection('manufacturing_orders').order_by('created_at', direction=firestore.Query.DESCENDING).stream()
+    supabase = get_supabase()
+    response = supabase.table('manufacturing_orders').select("*").order('created_at', desc=True).execute()
     orders = []
-    for doc in mos_stream:
-        d = doc.to_dict()
-        d['id'] = doc.id
-        d['id'] = doc.id
+    for doc in response.data:
+        d = doc
         if 'name' not in d:
-            d['name'] = doc.id
+            d['name'] = doc['id']
         orders.append(d)
             
     return render_template('manufacturing_orders.html', orders=orders)
@@ -219,9 +241,9 @@ def employee_activity():
     if current_user.role != 'manager':
         return redirect(url_for('main.index'))
     
-    db = firestore.client()
-    employees_stream = db.collection('users').where('role', '==', 'employee').stream()
-    employees = [User(id=doc.id, **doc.to_dict()) for doc in employees_stream]
+    supabase = get_supabase()
+    response = supabase.table('users').select("*").eq('role', 'employee').execute()
+    employees = [User(**doc) for doc in response.data]
     tasks = Task.get_all()
     
     tasks_by_emp = {}
@@ -247,9 +269,9 @@ def workers():
     if current_user.role != 'manager':
         return redirect(url_for('main.index'))
     
-    db = firestore.client()
-    employees_stream = db.collection('users').where('role', '==', 'employee').stream()
-    employees = [User(id=doc.id, **doc.to_dict()) for doc in employees_stream]
+    supabase = get_supabase()
+    response = supabase.table('users').select("*").eq('role', 'employee').execute()
+    employees = [User(**doc) for doc in response.data]
     
     return render_template('workers.html', workers=employees)
 
@@ -259,20 +281,22 @@ def operations():
     if current_user.role != 'manager':
         return redirect(url_for('main.index'))
     
-    db = firestore.client()
-    ops_stream = db.collection('settings').document('operations').get()
-    if ops_stream.exists:
-        ops_list = ops_stream.to_dict().get('list', [])
-    else:
-        # Initial defaults
-        ops_list = [
-            {'id': 1, 'name': 'Receiving', 'desc': 'Receiving raw materials'},
-            {'id': 2, 'name': 'Staging', 'desc': 'Staging materials'},
-            {'id': 3, 'name': 'Weighing', 'desc': 'Weighing components'},
-            {'id': 4, 'name': 'Filling', 'desc': 'Filling containers'},
-            {'id': 5, 'name': 'Packing', 'desc': 'Packing finished goods'}
+    supabase = get_supabase()
+    response = supabase.table('operations').select("*").order('sort_order', desc=False).execute()
+    ops_list = response.data
+    
+    if not ops_list:
+        # Initial defaults if empty
+        defaults = [
+            {'name': 'Receiving', 'description': 'Receiving raw materials'},
+            {'name': 'Staging', 'description': 'Staging materials'},
+            {'name': 'Weighing', 'description': 'Weighing components'},
+            {'name': 'Filling', 'description': 'Filling containers'},
+            {'name': 'Packing', 'description': 'Packing finished goods'}
         ]
-        db.collection('settings').document('operations').set({'list': ops_list})
+        supabase.table('operations').insert(defaults).execute()
+        response = supabase.table('operations').select("*").order('sort_order', desc=False).execute()
+        ops_list = response.data
         
     return render_template('operations.html', operations=ops_list)
 
@@ -280,54 +304,40 @@ def operations():
 @login_required
 def add_operation():
     data = request.json
-    db = firestore.client()
-    ops_ref = db.collection('settings').document('operations')
-    doc = ops_ref.get()
-    ops = doc.to_dict().get('list', []) if doc.exists else []
-    
-    # Generate new ID safely (max existing ID + 1)
-    if ops:
-        new_id = max(int(op['id']) for op in ops) + 1
-    else:
-        new_id = 1
+    supabase = get_supabase()
     
     new_op = {
-        'id': new_id,
         'name': data['name'],
-        'desc': data.get('desc', '')
+        'description': data.get('desc', '')
     }
-    ops.append(new_op)
-    ops_ref.set({'list': ops})
+    supabase.table('operations').insert(new_op).execute()
     return jsonify({'success': True})
 
 @main_bp.route('/api/orders/add', methods=['POST'])
 @login_required
 def add_order():
     data = request.json
-    db = firestore.client()
+    supabase = get_supabase()
 
     # Use provided ID as name
     mo_name = data.get('id')
     if not mo_name:
         return jsonify({'success': False, 'error': 'Name is required'}), 400
 
-    # Create document with auto-ID to allow any characters in name (slashes, etc)
-    new_doc_ref = db.collection('manufacturing_orders').document()
-    
-    new_doc_ref.set({
+    supabase.table('manufacturing_orders').insert({
         'name': mo_name,
         'product': data.get('product', 'Unknown Product'),
         'status': 'draft',
-        'dates': data.get('dates', datetime.utcnow().strftime('%b %d → %b %d')),
-        'created_at': datetime.utcnow()
-    })
+        'dates': data.get('dates', get_now_pst().strftime('%b %d → %b %d')),
+        'created_at': get_now_pst().isoformat()
+    }).execute()
     return jsonify({'success': True})
 
 @main_bp.route('/api/orders/update', methods=['POST'])
 @login_required
 def update_order():
     data = request.json
-    db = firestore.client()
+    supabase = get_supabase()
     updates = {
         'product': data['product'],
         'status': data['status']
@@ -335,124 +345,93 @@ def update_order():
     if 'dates' in data:
         updates['dates'] = data['dates']
         
-    db.collection('manufacturing_orders').document(data['id']).update(updates)
+    supabase.table('manufacturing_orders').update(updates).eq('id', data['id']).execute()
     return jsonify({'success': True})
 
 @main_bp.route('/api/orders/delete', methods=['POST'])
 @login_required
 def delete_order():
     data = request.json
-    db = firestore.client()
-    db.collection('manufacturing_orders').document(data['id']).delete()
+    supabase = get_supabase()
+    supabase.table('manufacturing_orders').delete().eq('id', data['id']).execute()
     return jsonify({'success': True})
 
 @main_bp.route('/api/operations/update', methods=['POST'])
 @login_required
 def update_operation():
     data = request.json
-    db = firestore.client()
-    ops_ref = db.collection('settings').document('operations')
-    doc = ops_ref.get()
-    ops = doc.to_dict().get('list', []) if doc.exists else []
+    supabase = get_supabase()
     
-    old_name = None
-    for op in ops:
-        if str(op['id']) == str(data['id']):
-            old_name = op['name']
-            op['name'] = data['name']
-            op['desc'] = data.get('desc', '')
-            break
-            
-    if old_name and old_name != data['name']:
-        # Update tasks that use this operation name
-        tasks_ref = db.collection('tasks').where('description', '==', old_name).stream()
-        batch = db.batch()
-        for t in tasks_ref:
-            batch.update(t.reference, {'description': data['name']})
-        batch.commit()
+    # Get old name for task update
+    old_op_res = supabase.table('operations').select("name").eq('id', data['id']).execute()
+    if old_op_res.data:
+        old_name = old_op_res.data[0]['name']
+        if old_name != data['name']:
+            supabase.table('tasks').update({'description': data['name']}).eq('description', old_name).execute()
 
-    ops_ref.set({'list': ops})
+    updates = {
+        'name': data['name'],
+        'description': data.get('desc', '')
+    }
+    supabase.table('operations').update(updates).eq('id', data['id']).execute()
     return jsonify({'success': True})
 
 @main_bp.route('/api/operations/reorder', methods=['POST'])
 @login_required
 def reorder_operations():
     data = request.json
-    db = firestore.client()
-    ops_ref = db.collection('settings').document('operations')
-    doc = ops_ref.get()
+    ids = data.get('ids', [])
+    supabase = get_supabase()
     
-    if not doc.exists:
-        return jsonify({'error': 'No operations found'}), 404
+    # Update each operation with its new sort_order (its index in the list)
+    for index, op_id in enumerate(ids):
+        supabase.table('operations').update({'sort_order': index}).eq('id', op_id).execute()
         
-    current_ops = doc.to_dict().get('list', [])
-    ops_map = {str(op['id']): op for op in current_ops}
-    
-    # Deduplicate input IDs while preserving order
-    ordered_ids = []
-    seen = set()
-    for oid in data.get('ids', []):
-        if oid not in seen:
-            seen.add(oid)
-            ordered_ids.append(oid)
-
-    ordered_ops = []
-    
-    for op_id in ordered_ids:
-        if str(op_id) in ops_map:
-            ordered_ops.append(ops_map[str(op_id)])
-            
-    # Append any missing ops to prevent data loss
-    claimed_ids = set(str(oid) for oid in ordered_ids)
-    for op in current_ops:
-        if str(op['id']) not in claimed_ids:
-            ordered_ops.append(op)
-            
-    ops_ref.update({'list': ordered_ops})
     return jsonify({'success': True})
 
 @main_bp.route('/api/operations/delete', methods=['POST'])
 @login_required
 def delete_operation():
     data = request.json
-    db = firestore.client()
-    
-    # Get the operation name first
-    ops_ref = db.collection('settings').document('operations')
-    doc = ops_ref.get()
-    ops = doc.to_dict().get('list', []) if doc.exists else []
-    
-    op_name = next((op['name'] for op in ops if str(op['id']) == str(data['id'])), None)
-    
-    if op_name:
-        pass
-
-    ops = [op for op in ops if str(op['id']) != str(data['id'])]
-    ops_ref.set({'list': ops})
+    supabase = get_supabase()
+    supabase.table('operations').delete().eq('id', data['id']).execute()
     return jsonify({'success': True})
 
 @main_bp.route('/api/manual_entry', methods=['POST'])
 @login_required
 def manual_entry():
     data = request.json
-    db = firestore.client()
+    supabase = get_supabase()
     
     # Fetch worker's predefined rate
-    user_doc = db.collection('users').document(data['employee_id']).get()
-    rate = user_doc.to_dict().get('hourly_rate', 0.0) if user_doc.exists else 0.0
+    response = supabase.table('users').select("hourly_rate").eq('id', data['employee_id']).execute()
+    rate = response.data[0]['hourly_rate'] if response.data else 0.0
     
     # Calculate duration from start/end times
-    from datetime import datetime
     try:
-        start = datetime.fromisoformat(data['start_time'].replace('Z', ''))
-        end = datetime.fromisoformat(data['end_time'].replace('Z', ''))
-        active_seconds = int((end - start).total_seconds())
+        # Browser sends naive local time string
+        start_naive = datetime.fromisoformat(data['start_time'])
+        end_naive = datetime.fromisoformat(data['end_time'])
+        
+        # Localize to PST and then get UTC for duration calculation
+        start_pst = PST.localize(start_naive)
+        end_pst = PST.localize(end_naive)
+        
+        active_seconds = int((end_pst - start_pst).total_seconds())
         if active_seconds < 0: active_seconds = 0
-    except:
+        
+        # Format for storage (ISO with offset)
+        start_iso = start_pst.isoformat()
+        end_iso = end_pst.isoformat()
+    except Exception as e:
+        print(f"Manual Entry Error: {e}")
         active_seconds = 0
+        start_iso = data['start_time']
+        end_iso = data['end_time']
     
     task_id = str(uuid.uuid4())
     task_data = {
+        'id': task_id,
         'description': data['operation'],
         'mo_reference': data['mo_reference'],
         'assigned_to_id': data['employee_id'],
@@ -461,12 +440,13 @@ def manual_entry():
         'active_seconds': active_seconds,
         'break_seconds': 0,
         'total_duration_seconds': active_seconds,
-        'created_at': firestore.SERVER_TIMESTAMP,
-        'start_time': data['start_time'],
-        'end_time': data['end_time'],
+        'created_at': get_now_pst().isoformat(),
+        'start_time': start_iso,
+        'end_time': end_iso,
+        'last_action_time': end_iso,
         'manual': True
     }
-    db.collection('tasks').document(task_id).set(task_data)
+    supabase.table('tasks').insert(task_data).execute()
     return jsonify({'success': True})
 
 @main_bp.route('/reports')
@@ -475,7 +455,7 @@ def reports():
     if current_user.role != 'manager':
         return redirect(url_for('main.index'))
         
-    db = firestore.client()
+    supabase = get_supabase()
     
     # Get filters from query params
     emp_id = request.args.get('employee')
@@ -485,21 +465,19 @@ def reports():
     operation = request.args.get('operation')
     
     # Fetch all data for filters
-    employees_stream = db.collection('users').where('role', '==', 'employee').stream()
-    employees = [User(id=doc.id, **doc.to_dict()) for doc in employees_stream]
+    response_emp = supabase.table('users').select("*").eq('role', 'employee').execute()
+    employees = [User(**doc) for doc in response_emp.data]
     
-    mos_stream = db.collection('manufacturing_orders').stream()
+    response_mo = supabase.table('manufacturing_orders').select("*").execute()
     mos = []
-    for doc in mos_stream:
-        d = doc.to_dict()
-        if d:
-            d['id'] = doc.id
-            if 'name' not in d:
-                d['name'] = doc.id # Fallback to ID if name field missing
-            mos.append(d)
+    for doc in response_mo.data:
+        d = doc
+        if 'name' not in d:
+            d['name'] = doc['id']
+        mos.append(d)
     
-    ops_stream = db.collection('settings').document('operations').get()
-    operations = ops_stream.to_dict().get('list', []) if ops_stream.exists else []
+    response_ops = supabase.table('operations').select("*").order('sort_order', desc=False).execute()
+    operations = response_ops.data
     
     # Fetch tasks and apply filters manually (Firestore has limited multi-field queries)
     tasks = Task.get_all()
@@ -574,7 +552,7 @@ def export_reports_csv():
     if current_user.role != 'manager':
         return jsonify({'error': 'Unauthorized'}), 403
         
-    db = firestore.client()
+    supabase = get_supabase()
     
     # Get filters
     emp_id = request.args.get('employee')
@@ -582,11 +560,10 @@ def export_reports_csv():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
     operation = request.args.get('operation')
-    operation = request.args.get('operation')
     
-    # Fetch data (simplified replication of reports logic)
-    employees_stream = db.collection('users').where('role', '==', 'employee').stream()
-    employees = {doc.id: doc.to_dict().get('name', 'Unknown') for doc in employees_stream}
+    # Fetch data
+    response_emp = supabase.table('users').select("*").eq('role', 'employee').execute()
+    employees = {doc['id']: doc.get('name', 'Unknown') for doc in response_emp.data}
     
     tasks = Task.get_all()
     
@@ -642,10 +619,8 @@ def export_reports_csv():
 def cancel_task(task_id):
     if current_user.role != 'manager':
         return jsonify({'error': 'Unauthorized'}), 403
-    db = firestore.client()
-    db.collection('tasks').document(task_id).update({
-        'status': 'cancelled'
-    })
+    supabase = get_supabase()
+    supabase.table('tasks').update({'status': 'cancelled'}).eq('id', task_id).execute()
     return jsonify({'success': True})
 
 @main_bp.route('/api/assign_task', methods=['POST'])
@@ -654,7 +629,7 @@ def assign_task():
     if current_user.role != 'manager':
         return jsonify({'error': 'Unauthorized'}), 403
     data = request.json
-    db = firestore.client()
+    supabase = get_supabase()
     
     assignments = data.get('assignments', [])
     description = data.get('description')
@@ -663,20 +638,16 @@ def assign_task():
     if not assignments:
         return jsonify({'error': 'No employees selected'}), 400
 
-    new_tasks = []
-    batch = db.batch()
+    new_tasks_to_insert = []
     for assign in assignments:
         task_id = str(uuid.uuid4())
-        task_ref = db.collection('tasks').document(task_id)
         
-        # Fetch worker's predefined rate to avoid frontend tampering
-        user_doc = db.collection('users').document(assign['employee_id']).get()
-        if user_doc.exists:
-            rate = user_doc.to_dict().get('hourly_rate', 0.0)
-        else:
-            rate = 0.0
+        # Fetch worker's predefined rate
+        response_user = supabase.table('users').select("hourly_rate").eq('id', assign['employee_id']).execute()
+        rate = response_user.data[0]['hourly_rate'] if response_user.data else 0.0
 
         task_data = {
+            'id': task_id,
             'description': description,
             'mo_reference': mo_ref,
             'assigned_to_id': assign['employee_id'],
@@ -685,19 +656,14 @@ def assign_task():
             'active_seconds': 0,
             'break_seconds': 0,
             'total_duration_seconds': 0,
-            'created_at': firestore.SERVER_TIMESTAMP
+            'created_at': get_now_pst().isoformat()
         }
-        batch.set(task_ref, task_data)
-        
-        # Prepare data for frontend return (timestamp needs stringifying if instant)
-        ret_data = task_data.copy()
-        ret_data['id'] = task_id
-        # Remove server timestamp for immediate frontend use (date mismatch acceptable for split second)
-        del ret_data['created_at'] 
-        new_tasks.append(ret_data)
+        new_tasks_to_insert.append(task_data)
 
-    batch.commit()
-    return jsonify({'success': True, 'new_tasks': new_tasks})
+    if new_tasks_to_insert:
+        supabase.table('tasks').insert(new_tasks_to_insert).execute()
+
+    return jsonify({'success': True, 'new_tasks': new_tasks_to_insert})
 
 # --- Administrative Actions ---
 
@@ -710,23 +676,24 @@ def task_action(task_id):
 
     data = request.get_json() or {}
     action = data.get('action')
-    db = firestore.client()
-    task_ref = db.collection('tasks').document(task_id)
-    task_doc = task_ref.get()
-
-    if not task_doc.exists:
+    supabase = get_supabase()
+    
+    response = supabase.table('tasks').select("*").eq('id', task_id).execute()
+    if not response.data:
         return jsonify({'error': 'Task not found'}), 404
 
-    task_data = task_doc.to_dict()
-    now = datetime.utcnow()
+    task_data = response.data[0]
+    now = get_now_pst().replace(tzinfo=None)
 
-    def to_naive(dt):
-        if not dt:
+    def to_naive(dt_str):
+        if not dt_str:
             return now
         try:
-            if hasattr(dt, 'to_datetime'):
-                dt = dt.to_datetime()
-            return dt.replace(tzinfo=None)
+            # Task.to_dt already converts to PST naive
+            dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            if dt.tzinfo is None:
+                dt = pytz.utc.localize(dt)
+            return dt.astimezone(pytz.timezone('America/Los_Angeles')).replace(tzinfo=None)
         except Exception:
             return now
 
@@ -767,10 +734,8 @@ def task_action(task_id):
             current_brk = task_data.get('break_seconds', 0)
             updates['break_seconds'] = current_brk + diff
             
-            # Close break record
-            breaks_query = task_ref.collection('breaks').order_by('start_time', direction=firestore.Query.DESCENDING).limit(1)
-            for b in breaks_query.stream():
-                b.reference.update({'end_time': now})
+            # Close break record in breaks table
+            supabase.table('breaks').update({'end_time': now.isoformat()}).eq('task_id', task_id).is_('end_time', 'null').execute()
         
         updates['status'] = 'active'
         updates['last_action_time'] = now
@@ -794,13 +759,14 @@ def task_action(task_id):
             updates['active_seconds'] = current_act + diff
         
         updates['status'] = 'break'
-        updates['last_action_time'] = now
+        updates['last_action_time'] = now.isoformat()
         updates['reason'] = data.get('reason', 'Break')
         
-        task_ref.collection('breaks').add({
+        supabase.table('breaks').insert({
+            'task_id': task_id,
             'reason': data.get('reason', 'Break'),
-            'start_time': now
-        })
+            'start_time': now.isoformat()
+        }).execute()
 
     elif action == 'complete':
         # Complete: Finalize task
@@ -819,7 +785,13 @@ def task_action(task_id):
         if start_time:
             updates['total_duration_seconds'] = int((now - start_time).total_seconds())
 
-    task_ref.update(updates)
+    if updates:
+        # Convert any remaining datetime objects to string
+        for k, v in updates.items():
+            if isinstance(v, datetime):
+                updates[k] = v.isoformat()
+        supabase.table('tasks').update(updates).eq('id', task_id).execute()
+    
     return jsonify({'success': True})
 
 
@@ -836,17 +808,37 @@ def edit_task_time(task_id):
     if active_seconds is None or active_seconds < 0:
         return jsonify({'error': 'Invalid duration'}), 400
     
-    db = firestore.client()
-    task_ref = db.collection('tasks').document(task_id)
-    task_doc = task_ref.get()
+    supabase = get_supabase()
+    response = supabase.table('tasks').select("*").eq('id', task_id).execute()
     
-    if not task_doc.exists:
+    if not response.data:
         return jsonify({'error': 'Task not found'}), 404
     
-    # Update the active_seconds field
-    task_ref.update({
-        'active_seconds': int(active_seconds)
-    })
+    task_db = response.data[0]
+    
+    # We use the end_time (preferred) or last_action_time as the anchor point
+    # We subtract the duration from this anchor to get the new start_time
+    ref_time_str = task_db.get('last_action_time') or task_db.get('end_time') or task_db.get('created_at')
+    updates = {'active_seconds': int(active_seconds)}
+    
+    if ref_time_str:
+        try:
+            from datetime import timedelta
+            # Parse the reference time (Supabase returns ISO with offset usually)
+            ref_dt = datetime.fromisoformat(ref_time_str.replace('Z', '+00:00'))
+            
+            # Recalculate start time: Anchor - Duration
+            new_start_dt = ref_dt - timedelta(seconds=int(active_seconds))
+            updates['start_time'] = new_start_dt.isoformat()
+            
+            # If the task was 'pending' and we added time, we should probably mark it 'completed' or 'clocked_out'
+            if task_db.get('status') == 'pending' and int(active_seconds) > 0:
+                updates['status'] = 'completed'
+                
+        except Exception as e:
+            print(f"Error recalculating start_time: {e}")
+
+    supabase.table('tasks').update(updates).eq('id', task_id).execute()
     
     return jsonify({'success': True, 'active_seconds': int(active_seconds)})
 
@@ -857,10 +849,20 @@ def update_employee_rate():
     if current_user.role != 'manager':
         return jsonify({'error': 'Unauthorized'}), 403
     data = request.json
-    db = firestore.client()
-    db.collection('users').document(data['employee_id']).update({
-        'hourly_rate': float(data['hourly_rate'])
-    })
+    supabase = get_supabase()
+    updates = {}
+    if 'hourly_rate' in data: updates['hourly_rate'] = float(data['hourly_rate'])
+    if 'name' in data: updates['name'] = data['name']
+    if 'username' in data: updates['username'] = data['username']
+    if 'worker_id' in data: updates['worker_id'] = data['worker_id']
+
+    if not updates:
+        return jsonify({'error': 'No data to update'}), 400
+
+    try:
+        supabase.table('users').update(updates).eq('id', data['employee_id']).execute()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     return jsonify({'success': True})
 
 @main_bp.route('/api/tasks')
@@ -884,9 +886,10 @@ def hire_employee():
     if current_user.role != 'manager':
         return jsonify({'error': 'Unauthorized'}), 403
     data = request.json
-    db = firestore.client()
+    supabase = get_supabase()
 
     username = data.get('username')
+    worker_id = data.get('worker_id')
     name = data.get('name')
     password = data.get('password')
     hourly_rate = float(data.get('hourly_rate', 0.0))
@@ -895,13 +898,19 @@ def hire_employee():
         return jsonify({'error': 'Username already exists'}), 400
 
     user_id = str(uuid.uuid4())
-    db.collection('users').document(user_id).set({
-        'username': username,
-        'name': name,
-        'password': password,
-        'role': 'employee',
-        'hourly_rate': hourly_rate
-    })
+    try:
+        supabase.table('users').insert({
+            'id': user_id,
+            'worker_id': worker_id,
+            'username': username,
+            'name': name,
+            'password': password,
+            'role': 'employee',
+            'hourly_rate': hourly_rate
+        }).execute()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+        
     return jsonify({'success': True})
 
 
@@ -911,7 +920,7 @@ def delete_employee():
     if current_user.role != 'manager':
         return jsonify({'error': 'Unauthorized'}), 403
     data = request.json
-    db = firestore.client()
-    db.collection('users').document(data['employee_id']).delete()
+    supabase = get_supabase()
+    supabase.table('users').delete().eq('id', data['employee_id']).execute()
     return jsonify({'success': True})
 

@@ -153,6 +153,7 @@
             <table>
                 <thead>
                     <tr>
+                        <th>Worker ID</th>
                         <th>Name</th>
                         <th>Username/Email</th>
                         <th>Hourly Rate</th>
@@ -163,10 +164,12 @@
                 <tbody>
                     {% for worker in workers %}
                     <tr>
+                        <td style="font-family: 'JetBrains Mono', monospace; font-weight: 600; color: #64748B;">{{
+                            worker.worker_id or '-' }}</td>
                         <td>
                             <div class="user-cell">
                                 <div class="avatar-circle">
-                                    {{ worker.name[0] }}
+                                    {{ (worker.name[0] if worker.name else '?') if worker else '?' }}
                                 </div>
                                 <a href="{{ url_for('main.employee_activity') }}"
                                     style="font-weight: 600; text-decoration: none; color: inherit; cursor: pointer;">{{
@@ -178,9 +181,11 @@
                             }}/hr</td>
                         <td><span class="badge badge-active">Active</span></td>
                         <td style="text-align: right;">
-                            <button class="icon-btn" title="Edit"
-                                onclick="openRateModal('{{ worker.id }}', '{{ worker.hourly_rate }}', '{{ worker.name }}', '{{ worker.username }}@BabylonLLC.com')"><i
-                                    class="fa-solid fa-pen"></i></button>
+                            <button class="icon-btn edit-worker-btn" title="Edit" data-id="{{ worker.id }}"
+                                data-rate="{{ worker.hourly_rate }}" data-name="{{ worker.name }}"
+                                data-username="{{ worker.username }}" data-worker-id="{{ worker.worker_id or '' }}">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
                             <button class="icon-btn delete" title="Delete" onclick="deleteWorker('{{ worker.id }}')"><i
                                     class="fa-regular fa-trash-can"></i></button>
                         </td>
@@ -208,6 +213,13 @@
                     class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body" style="padding: 0 2rem 2rem;">
+            <div style="margin-bottom: 1.25rem;">
+                <label
+                    style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #111; font-size: 0.95rem;">Worker
+                    ID (Unique / Required)</label>
+                <input type="text" id="hire_worker_id" placeholder="e.g. W-1001"
+                    style="width: 100%; padding: 0.8rem 1rem; border-radius: 10px; border: 1.5px solid #DDD; font-size: 0.95rem; outline: none; transition: border-color 0.2s;">
+            </div>
             <div style="margin-bottom: 1.25rem;">
                 <label
                     style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #111; font-size: 0.95rem;">Full
@@ -261,7 +273,14 @@
                     class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body" style="padding: 0 2rem 2rem;">
-            <input type="hidden" id="rate_worker_id">
+            <input type="hidden" id="rate_user_uuid">
+            <div style="margin-bottom: 1.25rem;">
+                <label
+                    style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #111; font-size: 0.95rem;">Worker
+                    ID</label>
+                <input type="text" id="edit_worker_id" placeholder="Worker ID"
+                    style="width: 100%; padding: 0.8rem 1rem; border-radius: 10px; border: 1.5px solid #DDD; font-size: 0.95rem;">
+            </div>
             <div style="margin-bottom: 1.25rem;">
                 <label
                     style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #111; font-size: 0.95rem;">Full
@@ -328,11 +347,21 @@
             document.getElementById('modalOverlay').classList.remove('active');
         }
 
-        function openRateModal(id, rate, name, email) {
-            document.getElementById('rate_worker_id').value = id;
+        // Initialize Edit Buttons
+        document.addEventListener('click', function (e) {
+            if (e.target.closest('.edit-worker-btn')) {
+                const btn = e.target.closest('.edit-worker-btn');
+                const data = btn.dataset;
+                openRateModal(data.id, data.rate, data.name, data.username, data.workerId);
+            }
+        });
+
+        function openRateModal(uuid, rate, name, email, worker_id) {
+            document.getElementById('rate_user_uuid').value = uuid;
             document.getElementById('new_rate').value = rate;
             document.getElementById('edit_name').value = name || '';
             document.getElementById('edit_email').value = email || '';
+            document.getElementById('edit_worker_id').value = worker_id || '';
             document.getElementById('rateModal').style.opacity = '1';
             document.getElementById('rateModal').style.pointerEvents = 'all';
             document.getElementById('modalOverlay').classList.add('active');
@@ -380,16 +409,17 @@
         async function hireWorker() {
             const name = document.getElementById('hire_name').value;
             const username = document.getElementById('hire_username').value;
+            const worker_id = document.getElementById('hire_worker_id').value;
             const rate = document.getElementById('hire_rate').value;
             const password = document.getElementById('hire_password').value;
 
-            if (!name || !username || !rate || !password) return alert('Please fill all fields');
+            if (!name || !username || !rate || !password || !worker_id) return alert('Please fill all fields');
 
             try {
                 const res = await fetch('/api/hire_employee', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, username, hourly_rate: rate, password })
+                    body: JSON.stringify({ name, username, worker_id, hourly_rate: rate, password })
                 });
                 if (res.ok) location.reload();
                 else {
@@ -400,17 +430,34 @@
         }
 
         async function updateRate() {
-            const id = document.getElementById('rate_worker_id').value;
+            const uuid = document.getElementById('rate_user_uuid').value;
             const rate = document.getElementById('new_rate').value;
+            const name = document.getElementById('edit_name').value;
+            const username = document.getElementById('edit_email').value;
+            const worker_id = document.getElementById('edit_worker_id').value;
 
             try {
                 const res = await fetch('/api/update_employee_rate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ employee_id: id, hourly_rate: rate })
+                    body: JSON.stringify({
+                        employee_id: uuid,
+                        hourly_rate: rate,
+                        name: name,
+                        username: username,
+                        worker_id: worker_id
+                    })
                 });
-                if (res.ok) location.reload();
-            } catch (e) { console.error(e); }
+                if (res.ok) {
+                    location.reload();
+                } else {
+                    const data = await res.json();
+                    alert(data.error || 'Failed to update worker');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Connection error');
+            }
         }
     </script>
     <script>

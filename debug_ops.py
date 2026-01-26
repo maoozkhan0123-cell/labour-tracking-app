@@ -1,24 +1,27 @@
-
-import firebase_admin
-from firebase_admin import credentials, firestore
 import os
+from dotenv import load_dotenv
+from supabase import create_client, Client
 
-if not firebase_admin._apps:
-    try:
-        cred = credentials.Certificate('firebase-key.json')
-        firebase_admin.initialize_app(cred)
-    except:
-        cred = credentials.ApplicationDefault()
-        firebase_admin.initialize_app(cred)
+load_dotenv()
 
-db = firestore.client()
-doc = db.collection('settings').document('operations').get()
+# Initialize Supabase
+url: str = os.environ.get("SUPABASE_URL")
+key: str = os.environ.get("SUPABASE_KEY")
 
-if doc.exists:
-    data = doc.to_dict()
-    ops = data.get('list', [])
+if not url or not key:
+    print("Error: SUPABASE_URL or SUPABASE_KEY not found in environment variables.")
+    exit(1)
+
+supabase: Client = create_client(url, key)
+
+# Get operations from settings table
+response = supabase.table('settings').select("*").eq('key', 'operations').execute()
+
+if response.data:
+    data = response.data[0]
+    ops = data.get('value', {}).get('list', [])
     print(f"Count: {len(ops)}")
     for op in ops:
         print(f"ID: {op.get('id')} ({type(op.get('id'))}), Name: {op.get('name')}")
 else:
-    print("Document not found")
+    print("Operations not found in settings")

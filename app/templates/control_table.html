@@ -62,9 +62,15 @@
 
     <!-- Main Content -->
     <main class="main-content expanded">
-        <div class="page-header">
-            <h1 class="page-title">Control Table</h1>
-            <p class="page-subtitle">Real-time tracking of worker task activities</p>
+        <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div>
+                <h1 class="page-title">Control Table</h1>
+                <p class="page-subtitle">Real-time tracking of worker task activities (PST Timezone)</p>
+            </div>
+            <button class="btn btn-primary" onclick="openManualEntryModal()"
+                style="width: auto; padding: 0.6rem 1.5rem;">
+                <i class="fa-solid fa-plus" style="margin-right:8px;"></i> Manual Entry
+            </button>
         </div>
 
         <!-- Control Table Section -->
@@ -98,8 +104,22 @@
                 <option value="pending">Pending</option>
             </select>
 
+            <div
+                style="display: flex; align-items: center; gap: 0.5rem; background: #F8FAFC; padding: 0.25rem 0.75rem; border-radius: 8px; border: 1px solid #CBD5E1;">
+                <span style="font-size: 0.8rem; font-weight: 600; color: #64748B;">From:</span>
+                <input type="date" id="startDate" value="{{ filters.start_date or '' }}" onchange="applyFilters()"
+                    style="border: none; background: transparent; outline: none; font-size: 0.85rem; color: #475569;">
+            </div>
+
+            <div
+                style="display: flex; align-items: center; gap: 0.5rem; background: #F8FAFC; padding: 0.25rem 0.75rem; border-radius: 8px; border: 1px solid #CBD5E1;">
+                <span style="font-size: 0.8rem; font-weight: 600; color: #64748B;">To:</span>
+                <input type="date" id="endDate" value="{{ filters.end_date or '' }}" onchange="applyFilters()"
+                    style="border: none; background: transparent; outline: none; font-size: 0.85rem; color: #475569;">
+            </div>
+
             <button onclick="resetFilters()"
-                style="padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid #E2E8F0; background: white; color: #64748B; cursor: pointer;">
+                style="padding: 0.6rem 1.25rem; border-radius: 8px; border: 1px solid #E2E8F0; background: white; color: #64748B; font-weight: 600; cursor: pointer; transition: all 0.2s;">
                 Reset
             </button>
         </div>
@@ -110,7 +130,9 @@
                     <thead>
                         <tr style="background: #F8FAFC; border-bottom: 2px solid #E2E8F0;">
                             <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: #475569;">
-                                Worker</th>
+                                Worker ID</th>
+                            <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: #475569;">
+                                Name</th>
                             <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: #475569;">MO
                             </th>
                             <th style="padding: 0.75rem 1rem; text-align: left; font-weight: 700; color: #475569;">
@@ -129,11 +151,15 @@
                         {% for t in tasks %}
                         {% set worker = emp_map.get(t.assigned_to_id) %}
                         <tr style="border-bottom: 1px solid #F1F5F9;">
+                            <td
+                                style="padding: 0.75rem 1rem; font-weight: 600; color: #64748B; font-family: 'JetBrains Mono', monospace;">
+                                {{ worker.worker_id or '-' }}
+                            </td>
                             <td style="padding: 0.75rem 1rem;">
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                                     <div
                                         style="width: 32px; height: 32px; background: var(--primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem;">
-                                        {{ worker.name[0] if worker else '?' }}
+                                        {{ (worker.name[0] if worker.name else '?') if worker else '?' }}
                                     </div>
                                     <span style="font-weight: 600; color: #1E293B;">{{ worker.name if worker else
                                         'Unknown' }}</span>
@@ -143,18 +169,25 @@
                                 <span class="badge badge-blue" style="font-size: 0.75rem;">{{ t.mo_reference }}</span>
                             </td>
                             <td style="padding: 0.75rem 1rem; color: #475569;">{{ t.description }}</td>
-                            <td style="padding: 0.75rem 1rem; color: #64748B; font-size: 0.85rem;">
+                            <td style="padding: 0.75rem 1rem; color: #64748B; font-size: 0.85rem; font-weight: 500;">
                                 {% if t.start_time %}
-                                {{ t.start_time.strftime('%I:%M %p') if t.start_time is not string else
-                                t.start_time[:16] }}
+                                {% if t.start_time is string %}
+                                {{ t.start_time }}
+                                {% else %}
+                                {{ t.start_time.strftime('%I:%M %p') }}
+                                {% endif %}
                                 {% else %}
                                 -
                                 {% endif %}
                             </td>
-                            <td style="padding: 0.75rem 1rem; color: #64748B; font-size: 0.85rem;">
-                                {% if t.last_action_time %}
-                                {{ t.last_action_time.strftime('%I:%M %p') if t.last_action_time is not string else
-                                t.last_action_time[:16] }}
+                            <td style="padding: 0.75rem 1rem; color: #64748B; font-size: 0.85rem; font-weight: 500;">
+                                {% set last = t.last_action_time or t.end_time %}
+                                {% if last %}
+                                {% if last is string %}
+                                {{ last }}
+                                {% else %}
+                                {{ last.strftime('%I:%M %p') }}
+                                {% endif %}
                                 {% else %}
                                 -
                                 {% endif %}
@@ -211,6 +244,84 @@
                 </table>
             </div>
         </div>
+        <div id="modalOverlay" class="overlay" onclick="closeManualEntryModal()"></div>
+
+        <!-- Manual Entry Modal -->
+        <div id="manualEntryModal" class="offcanvas"
+            style="right: auto; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 550px; height: auto; border-radius: 16px; opacity: 0; pointer-events: none; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); z-index: 1001;">
+            <div class="offcanvas-header" style="border-bottom: 1px solid #F1F5F9; padding: 1.5rem 2rem;">
+                <h3 class="offcanvas-title" style="font-size: 1.25rem; font-weight: 700; color: #1E293B;">Manual Time
+                    Entry</h3>
+                <button class="close-btn" onclick="closeManualEntryModal()"
+                    style="background: #F1F5F9; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; color: #64748B;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="offcanvas-body" style="padding: 2rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                    <div class="form-group">
+                        <label
+                            style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748B; margin-bottom: 0.5rem;">Worker</label>
+                        <select id="manual_worker"
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #E2E8F0; border-radius: 10px; background: #F8FAFC; outline: none; font-size: 0.9rem;">
+                            <option value="">Select Worker...</option>
+                            {% for emp in employees %}
+                            <option value="{{ emp.id }}">{{ emp.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label
+                            style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748B; margin-bottom: 0.5rem;">Manufacturing
+                            Order</label>
+                        <select id="manual_mo"
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #E2E8F0; border-radius: 10px; background: #F8FAFC; outline: none; font-size: 0.9rem;">
+                            <option value="">Select MO...</option>
+                            {% for mo in mos %}
+                            <option value="{{ mo.name }}">{{ mo.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 1.5rem;">
+                    <label
+                        style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748B; margin-bottom: 0.5rem;">Operation</label>
+                    <select id="manual_op"
+                        style="width: 100%; padding: 0.75rem; border: 1px solid #E2E8F0; border-radius: 10px; background: #F8FAFC; outline: none; font-size: 0.9rem;">
+                        <option value="">Select Operation...</option>
+                        {% for op in operations %}
+                        <option value="{{ op.name }}">{{ op.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem;">
+                    <div class="form-group">
+                        <label
+                            style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748B; margin-bottom: 0.5rem;">Start
+                            Date & Time</label>
+                        <input type="datetime-local" id="manual_start"
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #E2E8F0; border-radius: 10px; background: #F8FAFC; outline: none; font-size: 0.9rem;">
+                    </div>
+                    <div class="form-group">
+                        <label
+                            style="display: block; font-size: 0.85rem; font-weight: 600; color: #64748B; margin-bottom: 0.5rem;">End
+                            Date & Time</label>
+                        <input type="datetime-local" id="manual_end"
+                            style="width: 100%; padding: 0.75rem; border: 1px solid #E2E8F0; border-radius: 10px; background: #F8FAFC; outline: none; font-size: 0.9rem;">
+                    </div>
+                </div>
+            </div>
+            <div style="padding: 0 2rem 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
+                <button class="btn"
+                    style="background: white; border: 1px solid #E2E8F0; color: #64748B; padding: 0.75rem 1.5rem; border-radius: 10px; font-weight: 600;"
+                    onclick="closeManualEntryModal()">Cancel</button>
+                <button class="btn btn-primary" style="padding: 0.75rem 2rem; border-radius: 10px; font-weight: 600;"
+                    onclick="submitManualEntry()">Create Record</button>
+            </div>
+        </div>
+
     </main>
 
     <script>
@@ -292,13 +403,8 @@
                 });
 
                 if (res.ok) {
-                    const data = await res.json();
-                    // Update display
-                    const newHours = Math.floor(data.active_seconds / 3600);
-                    const newMins = Math.floor((data.active_seconds % 3600) / 60);
-                    display.textContent = `${String(newHours).padStart(2, '0')}:${String(newMins).padStart(2, '0')}`;
-
-                    cancelEditDuration(taskId);
+                    // Update success - reload to show calculated Start Time
+                    location.reload();
                 } else {
                     const err = await res.json();
                     alert('Error: ' + (err.error || 'Failed to update duration'));
@@ -321,19 +427,80 @@
                 }
             }
         });
-        // Filter Logic
+        function openManualEntryModal() {
+            document.getElementById('manualEntryModal').style.opacity = '1';
+            document.getElementById('manualEntryModal').style.pointerEvents = 'all';
+            document.getElementById('manualEntryModal').style.transform = 'translate(-50%, -50%) scale(1)';
+            document.getElementById('modalOverlay').classList.add('active');
+        }
+
+        function closeManualEntryModal() {
+            document.getElementById('manualEntryModal').style.opacity = '0';
+            document.getElementById('manualEntryModal').style.pointerEvents = 'none';
+            document.getElementById('manualEntryModal').style.transform = 'translate(-50%, -50%) scale(0.95)';
+            document.getElementById('modalOverlay').classList.remove('active');
+        }
+
+        async function submitManualEntry() {
+            const data = {
+                employee_id: document.getElementById('manual_worker').value,
+                mo_reference: document.getElementById('manual_mo').value,
+                operation: document.getElementById('manual_op').value,
+                start_time: document.getElementById('manual_start').value,
+                end_time: document.getElementById('manual_end').value
+            };
+
+            if (!data.employee_id || !data.mo_reference || !data.operation || !data.start_time || !data.end_time) {
+                return alert('Please fill in all fields');
+            }
+
+            try {
+                const res = await fetch('/api/manual_entry', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    location.reload();
+                } else {
+                    const err = await res.json();
+                    alert('Error: ' + (err.error || 'Failed to create record'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Connection error');
+            }
+        }
+
+        function applyFilters() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            let url = new URL(window.location);
+            if (startDate) url.searchParams.set('start_date', startDate);
+            else url.searchParams.delete('start_date');
+
+            if (endDate) url.searchParams.set('end_date', endDate);
+            else url.searchParams.delete('end_date');
+
+            window.location.href = url.toString();
+        }
+
+        // Filter Logic (Frontend only for worker/status/search)
         function filterTable() {
             const searchShort = document.getElementById('searchInput').value.toLowerCase();
-            const workerFilter = document.getElementById('workerFilter').value;
-            const statusFilter = document.getElementById('statusFilter').value;
+            const workerFilter = document.getElementById('workerFilter').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value.toLowerCase();
 
             const rows = document.querySelectorAll('tbody tr');
 
             rows.forEach(row => {
-                const workerName = row.querySelector('td:nth-child(1)').innerText.trim();
-                const moRef = row.querySelector('td:nth-child(2)').innerText.toLowerCase();
-                const opDesc = row.querySelector('td:nth-child(3)').innerText.toLowerCase();
-                const statusText = row.querySelector('td:nth-child(7)').innerText.toLowerCase().trim();
+                const workerId = row.querySelector('td:nth-child(1)').innerText.toLowerCase();
+                const workerName = row.querySelector('td:nth-child(2)').innerText.toLowerCase();
+                const moRef = row.querySelector('td:nth-child(3)').innerText.toLowerCase();
+                const opDesc = row.querySelector('td:nth-child(4)').innerText.toLowerCase();
+                const statusText = row.querySelector('td:nth-child(8)').innerText.toLowerCase().trim();
 
                 // Check Worker
                 if (workerFilter !== 'all' && !workerName.includes(workerFilter)) {
@@ -342,8 +509,6 @@
                 }
 
                 // Check Status
-                // "completed" logic: if filter is completed, match 'completed'
-                // the badges usually say 'TIMER RUNNING', 'CLOCKED IN', 'PENDING'
                 if (statusFilter !== 'all') {
                     if (!statusText.includes(statusFilter)) {
                         row.style.display = 'none';
@@ -351,9 +516,9 @@
                     }
                 }
 
-                // Check Search (MO, Op, Worker)
+                // Check Search (Worker ID, MO, Op, Worker Name)
                 if (searchShort) {
-                    const match = moRef.includes(searchShort) || opDesc.includes(searchShort) || workerName.toLowerCase().includes(searchShort);
+                    const match = workerId.includes(searchShort) || moRef.includes(searchShort) || opDesc.includes(searchShort) || workerName.includes(searchShort);
                     if (!match) {
                         row.style.display = 'none';
                         return;
@@ -365,10 +530,7 @@
         }
 
         function resetFilters() {
-            document.getElementById('searchInput').value = '';
-            document.getElementById('workerFilter').value = 'all';
-            document.getElementById('statusFilter').value = 'all';
-            filterTable();
+            window.location.href = window.location.pathname;
         }
 
     </script>

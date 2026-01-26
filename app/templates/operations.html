@@ -90,12 +90,12 @@
                     </div>
                     <div>
                         <div style="font-weight: 700; color: var(--text-main);">{{ op.name }}</div>
-                        <div style="font-size: 0.9rem; color: var(--text-muted);">{{ op.desc }}</div>
+                        <div style="font-size: 0.9rem; color: var(--text-muted);">{{ op.description }}</div>
                     </div>
                 </div>
                 <div style="display: flex; gap: 0.5rem;">
                     <button class="icon-btn" title="Edit"
-                        onclick="openEditModal('{{ op.id }}', '{{ op.name }}', '{{ op.desc }}')"><i
+                        onclick="openEditModal('{{ op.id }}', '{{ op.name }}', '{{ op.description }}')"><i
                             class="fa-solid fa-pen"></i></button>
                     <button class="icon-btn delete" title="Delete" onclick="deleteOperation('{{ op.id }}')"><i
                             class="fa-regular fa-trash-can"></i></button>
