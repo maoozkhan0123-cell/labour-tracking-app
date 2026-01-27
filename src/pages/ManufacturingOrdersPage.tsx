@@ -2,16 +2,31 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 
+// Define the interface for the Order object
+interface ManufacturingOrder {
+    id: string;
+    mo_number: string;
+    product_name: string;
+    sku: string;
+    quantity: number;
+    po_number: string;
+    event_id: string;
+    scheduled_date: string;
+    current_status: string;
+    created_at?: string;
+}
+
 export const ManufacturingOrdersPage: React.FC = () => {
-    const [orders, setOrders] = useState<any[]>([]);
+    // State explicitly typed with the interface
+    const [orders, setOrders] = useState<ManufacturingOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [search, setSearch] = useState('');
 
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
-    const [selectedOrder, setSelectedOrder] = useState<any>(null);
+    const [selectedOrder, setSelectedOrder] = useState<ManufacturingOrder | null>(null);
 
-    // Updated formData structure matching new schema
+    // Updated formData structure
     const [formData, setFormData] = useState({
         mo_number: '',
         quantity: 0,
@@ -27,8 +42,8 @@ export const ManufacturingOrdersPage: React.FC = () => {
 
     const fetchOrders = async () => {
         setIsLoading(true);
-        const { data } = await supabase.from('manufacturing_orders').select('*').order('created_at', { ascending: false }) as { data: any[] };
-        if (data) setOrders(data);
+        const { data } = await supabase.from('manufacturing_orders').select('*').order('created_at', { ascending: false });
+        if (data) setOrders(data as ManufacturingOrder[]);
         setIsLoading(false);
     };
 
@@ -46,10 +61,6 @@ export const ManufacturingOrdersPage: React.FC = () => {
             if (result && result.items) {
                 let count = 0;
                 for (const item of result.items) {
-                    // Normalize status to title case if needed, or keep as is.
-                    // API returns "Greenlit", "Shipped". App uses "Draft", "Scheduled", etc.
-                    // We will just store what API gives.
-
                     const po = item.po_number || '';
                     if (!po) continue;
 
@@ -117,6 +128,7 @@ export const ManufacturingOrdersPage: React.FC = () => {
     const handleUpdate = async () => {
         if (!selectedOrder) return;
 
+        // Ensure selectedOrder.id is accessed safely
         const { error } = await (supabase.from('manufacturing_orders') as any).update({
             quantity: formData.quantity,
             po_number: formData.po_number,
@@ -141,7 +153,7 @@ export const ManufacturingOrdersPage: React.FC = () => {
         if (!error) fetchOrders();
     };
 
-    const openEdit = (order: any) => {
+    const openEdit = (order: ManufacturingOrder) => {
         setSelectedOrder(order);
         setFormData({
             mo_number: order.mo_number || '',
