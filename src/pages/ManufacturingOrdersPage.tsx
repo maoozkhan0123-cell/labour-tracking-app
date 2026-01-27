@@ -209,7 +209,7 @@ export const ManufacturingOrdersPage: React.FC = () => {
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <button className="btn btn-secondary" onClick={handleSync}
                         style={{ width: 'auto', padding: '0.75rem 1.0rem', background: '#F1F5F9', color: '#0F172A', border: '1px solid #E2E8F0', borderRadius: '8px', fontWeight: 600 }}>
-                        <i className="fa-solid fa-arrows-rotate" style={{ marginRight: '8px' }}></i> Sync Odoo
+                        <i className="fa-solid fa-arrows-rotate" style={{ marginRight: '8px' }}></i> Sync Orders
                     </button>
                     <button className="btn btn-primary" onClick={() => { resetForm(); setIsAddOpen(true); }}
                         style={{ width: 'auto', padding: '0.75rem 1.5rem', background: '#000', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600 }}>
