@@ -51,11 +51,7 @@ export const ManufacturingOrdersPage: React.FC = () => {
         if (!confirm('Fetch latest orders from Odoo? This will update existing records.')) return;
         setIsLoading(true);
         try {
-            const response = await fetch('https://us-central1-pythonautomation-430712.cloudfunctions.net/laborTrackAPI', {
-                headers: {
-                    'X-APP-KEY': 'Y3JhY2t3YXNoc2VydmVib3VuZHRoaW5rd2luZHBsYW50Y29ubmVjdGVkbG9uZ2VybG8'
-                }
-            });
+            const response = await fetch('/api/sync-odoo');
             const result = await response.json();
 
             if (result && result.items) {
