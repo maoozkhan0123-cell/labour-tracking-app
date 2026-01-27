@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "labour-tracker-app",
+  "private_key_id": "f98897b428e97f17d789b7acb95d0b7e88c2934d",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDGxbr6/pSF6Xtb\nQuSoWv8HYN1ARryc1SDmSVa3T6sB6NlmZZCR3MSX/uPvMmiTiPzP0jw4x0NYzznn\n5/mns2tIumjDz8bIdujWCwW11tczk1H+1bUZFwkVMv8EYx+vC/87dlgazWI5NMf5\nFrlwpxsCifwda32FEg9DKrUjxs/hkh2BZs1uGed6O7a7kGieRAgl5luqqCPz7fkL\nHrzwNuaqOurCd3VLP6ZfseiFArH0qF+VUF0aeWbooyb54w3pL1ukcZ0BgAAp4bbg\n5HXLcwYFg5MW1LBGSDKCERmSh9wGrFoWz9nDnSAVDZ6oYgQYYcxElfhk+q4zlUbK\nNIvYqW13AgMBAAECggEAH1/pjiGt/t8mNfb+kaZfV+JNug4QSm8HtOHBmsir9O60\nlgmVArkGnPlCMCjUQelfAkysbcfiFPwMp1LB4NscpYuq6rF6rny6bsKpoZSqPj1U\nNXW1EqNEr0Bv6VjeEOrDXDbnXD+r79ypbeNM3P+7bzCph1lGpEEAALmWgvGoMXHv\n60md3beeta1D+Wd5z8j10Ftq4Ge7nZbVvoSiutqauG2jcyHjWjCDP78hasYFO4zY\nBx9Ik5VAbR7mqT1I6W2MJeLA5dXXvhvpGR9rsA9/YWWa4wL5i3SvOjA7rBsnpYv7\nJaxV1dq/t/cqfeCa5tpjt2Y85qR5XM6cZVcHB6Tr2QKBgQDyGsEaB3OJBzeOsuiB\nR6/AMNVhy8nxjzcgryTRnPi/NR1cdOtmeCsjQyQ/pnCgIxoH+VXZMvzGaTwM38sh\nO3ADW+ITu21u2iHW3vvFQHDB1kqeAEsTzbm93CmIWKuvEyKVspxDB5bX5fJpNi7Z\nMt511csyuwx14MgJjgxQaEeYKQKBgQDSLkvjc8db7hkpyWPnmp2YlskBM0EJo4ZF\nIMIxuDRA2PmTexYf0vjbwB/mkTMAiwlJHtkG66k4vBmirfxNeRxRs8gNaRi6Ubm7\nh2VvD8yQ2swDF5rohYS5slQpnMenWONfdIKxni1RuzEsVoR36WD5XONwGjmmbiX3\nVketUpAMnwKBgHB9s+mXOryZqNvaDyQ6ndPMHOmC2gMuSywZlR78M6wMTuctwE7t\nWQXaZZZZjI0roiXAWX5BLag3L1rABU8cofA9mi8W8EMIgZ6oHw3I4lt+aU8+zaOW\n/E3WZUngAW2ok3JA+lA+z3zjcB4oud3bv/e6bd7VgHWpCuk9okUeHt35AoGAFFRc\nDMUPHGo8Ttlm62j+I1s6V/5gJRGHFDql7e82Rqt2AHjgW/WpEoBT1ZZny36nSEZO\nkafLt2wiQqT3iXrUbWapS/rFZIgxId1nx0VM8Rnor8fhuOnpO5jvIRNEEIC9hWcc\nmReGpKgpinNX3s1ZDuWYLiirONjgnTrgNfiNbFsCgYEA3Gnbgl1GxI+FWUMytiSQ\nFoUmaLq4wUtCE/uU+9QW4lLA2Rd1G2WS53tBvj/4T4n+X1Gm4hTz/wak4dRv5BGl\nslI6o02N0G9lfIP9Ct1I/sl5qWxl2ln38dkULxLE6F/kykMGC5j401nl8N9IBnwl\nIDcJjIGR1Tes+/gW2cU1koY=\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@labour-tracker-app.iam.gserviceaccount.com",
+  "client_id": "118247028650075853173",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40labour-tracker-app.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

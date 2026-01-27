@@ -1,63 +1,73 @@
-# Labour Tracker Portal
+# React + TypeScript + Vite
 
-A premium, minimalistic labor tracking and payroll management system. This application allows managers to dispatch workflows (tasks) to employees, track work/break time with high precision, and calculate earned pay in real-time.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## 🚀 Key Features
+Currently, two official plugins are available:
 
-- **Real-Time Tracking**: High-precision timers for active work and non-active (break) periods.
-- **Live Earnings**: Instant calculation of pay based on active work time and assigned hourly rates.
-- **Production Control Matrix**: Interactive grid for assigning workers to specific manufacturing orders and operations.
-- **Interactive Dashboard**: Real-time monitoring of employee activities and performance.
-- **Worker Management**: Integrated module for onboarding new employees with custom rates.
-- **Premium UI**: Clean, modern interface with smooth animations and sidebar navigation.
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-## 🛠️ Technology Stack
+## React Compiler
 
-- **Backend**: Python / Flask
-- **Database**: Supabase (PostgreSQL)
-- **Frontend**: HTML5, Vanilla CSS3 (Custom Design System), JavaScript (ES6+)
-- **Icons**: Font Awesome 6
-- **Deployment**: Optimized for Vercel
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-## 📦 Setup & Installation
+## Expanding the ESLint configuration
 
-### Local Development
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/HananBajwa12/Labour-Tracker-app.git
-   cd Labour-Tracker-app
-   ```
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
 
-3. **Configure Environment**:
-   Create a `.env` file based on `.env.example` and provide your Supabase credentials.
-   See `SUPABASE_MIGRATION.md` for detailed setup instructions.
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
 
-4. **Run the application**:
-   ```bash
-   python run.py
-   ```
-   The app will be available at `http://localhost:8001`.
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
 
-### Default Credentials
-- **Admin**: `admin` / `123`
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
-## ☁️ Vercel Deployment
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
 
-1. Install Vercel CLI: `npm i -g vercel`
-2. Run `vercel` in the root directory.
-3. Configure `SUPABASE_URL` and `SUPABASE_KEY` as environment variables in the Vercel dashboard.
-
-## 🧱 Project Structure
-
-- `app/`: Core application logic (models, routes, templates).
-- `static/`: CSS and styling assets.
-- `index.py`: Entry point for Vercel deployment.
-- `vercel.json`: Vercel configuration for Python runtime.
-
-## 📄 License
-All rights reserved.
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
