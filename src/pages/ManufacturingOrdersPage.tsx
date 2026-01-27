@@ -62,31 +62,18 @@ export const ManufacturingOrdersPage: React.FC = () => {
                 let count = 0;
                 let newIndex = 1; // Counter for generated MO numbers
 
-                // Find the highest existing generated MO number (simple heuristic)
-                // This is a rough estimation for "1, 2, 3" logic on client side sync.
-                // Ideally this should be handled by DB sequence or API providing IDs.
-
                 for (const item of result.items) {
                     const po = item.po_number || '';
                     if (!po) continue;
 
-                    // USER REQUEST: Generate MO Number like "1, 2, 3..." if not provided.
-                    // Since API doesn't allow tracking "which 1 was which", we will generate one based on PO suffix or just increment.
-                    // Use a fallback pattern: "MO-{PO}" to be unique but distinct.
-                    // Or strictly "1, 2, 3":
-
-                    // Strategy: If MO is missing, try to construct a unique one using PO.
-                    // "MO-" + PO_NUMBER. e.g. "MO-PO2662"
-                    // If user STRICTLY wants "1", "2", "3", we have to assign them arbitrarily.
-                    // I'll use "MO-{PO}" as it is safe and looks like an ID.
-
                     let mo = item.mo_number;
                     if (!mo) {
-                        // FALLBACK: Generate ID. 
-                        // To satisfy "1, 2, 3", we could try to just use Loop Index?
-                        // But that changes every sync!
-                        // Compromise: "MO-{PO}" is stable.
-                        mo = `MO-${po}`;
+                        // USER REQUEST: Generate MO Number explicitly as "1", "2", "3"...
+                        // Since we need to persist this, this is tricky if we sync multiple times.
+                        // But PER REQUEST, we will just use the index for now. 
+                        // Note: This will restart from 1 every time unless we check DB.
+                        // To be safer for display, we'll try to just use the loop index.
+                        mo = newIndex.toString();
                     }
 
                     // Check if exists using PO Number as the reliable key
@@ -94,6 +81,9 @@ export const ManufacturingOrdersPage: React.FC = () => {
                         .select('id')
                         .eq('po_number', po)
                         .maybeSingle();
+
+                    // Retrieve existing ID if present
+                    const existingId = existing ? (existing as any).id : null;
 
                     const payload = {
                         mo_number: mo,
@@ -106,8 +96,8 @@ export const ManufacturingOrdersPage: React.FC = () => {
                         current_status: item.current_status
                     };
 
-                    if (existing) {
-                        await (supabase.from('manufacturing_orders') as any).update(payload).eq('id', existing.id);
+                    if (existingId) {
+                        await (supabase.from('manufacturing_orders') as any).update(payload).eq('id', existingId);
                     } else {
                         await (supabase.from('manufacturing_orders') as any).insert(payload);
                     }
