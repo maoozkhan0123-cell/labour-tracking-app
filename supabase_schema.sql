@@ -14,12 +14,17 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- 2. Manufacturing Orders (MO) table
+-- Updated to match user requirements
 CREATE TABLE IF NOT EXISTS manufacturing_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    product TEXT,
-    status TEXT DEFAULT 'draft',
-    dates TEXT,
+    mo_number TEXT UNIQUE NOT NULL, -- Was 'name'
+    quantity INTEGER DEFAULT 0,
+    po_number TEXT,
+    product_name TEXT, -- Was 'product'
+    sku TEXT,
+    event_id TEXT,
+    scheduled_date DATE, -- Was 'dates'
+    current_status TEXT DEFAULT 'draf', -- Was 'status' ('Packed', 'Draft', etc)
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -35,7 +40,7 @@ CREATE TABLE IF NOT EXISTS operations (
 CREATE TABLE IF NOT EXISTS tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     description TEXT,
-    mo_reference TEXT,
+    mo_reference TEXT, -- References manufacturing_orders.mo_number
     assigned_to_id UUID REFERENCES users(id) ON DELETE CASCADE,
     status TEXT DEFAULT 'pending',
     hourly_rate NUMERIC DEFAULT 0.0,
@@ -67,31 +72,49 @@ CREATE TABLE IF NOT EXISTS settings (
 
 -- ==========================================================
 -- MIGRATION / UPDATE SECTION
--- Run these if you already created tables previously but are missing columns
 -- ==========================================================
 
--- Add worker_id to users if not exists
+-- MIGRATION FOR MO TABLE CHANGES
+-- Rename 'name' to 'mo_number' if exists
+DO $$ 
+BEGIN 
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='manufacturing_orders' AND column_name='name') THEN
+        ALTER TABLE manufacturing_orders RENAME COLUMN name TO mo_number;
+    END IF;
+END $$;
+
+-- Rename 'product' to 'product_name' if exists
+DO $$ 
+BEGIN 
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='manufacturing_orders' AND column_name='product') THEN
+        ALTER TABLE manufacturing_orders RENAME COLUMN product TO product_name;
+    END IF;
+END $$;
+
+-- Rename 'status' to 'current_status' if exists
+DO $$ 
+BEGIN 
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='manufacturing_orders' AND column_name='status') THEN
+        ALTER TABLE manufacturing_orders RENAME COLUMN status TO current_status;
+    END IF;
+END $$;
+
+-- Add new columns
+ALTER TABLE manufacturing_orders ADD COLUMN IF NOT EXISTS quantity INTEGER DEFAULT 0;
+ALTER TABLE manufacturing_orders ADD COLUMN IF NOT EXISTS po_number TEXT;
+ALTER TABLE manufacturing_orders ADD COLUMN IF NOT EXISTS sku TEXT;
+ALTER TABLE manufacturing_orders ADD COLUMN IF NOT EXISTS event_id TEXT;
+ALTER TABLE manufacturing_orders ADD COLUMN IF NOT EXISTS scheduled_date DATE;
+
+-- Ensure worker_id exists
 ALTER TABLE users ADD COLUMN IF NOT EXISTS worker_id TEXT UNIQUE;
 
--- Add sort_order to operations if missing
+-- Ensure operations have descriptions and sort_order
 ALTER TABLE operations ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
 
--- Add description to operations if missing (renaming from 'desc')
 DO $$ 
 BEGIN 
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='operations' AND column_name='desc') THEN
         ALTER TABLE operations RENAME COLUMN "desc" TO description;
     END IF;
 END $$;
-
--- Ensure task times use TIMESTAMPTZ
-ALTER TABLE tasks ALTER COLUMN start_time TYPE TIMESTAMPTZ;
-ALTER TABLE tasks ALTER COLUMN last_action_time TYPE TIMESTAMPTZ;
-ALTER TABLE tasks ALTER COLUMN end_time TYPE TIMESTAMPTZ;
-ALTER TABLE tasks ALTER COLUMN created_at TYPE TIMESTAMPTZ;
-
--- ==========================================================
--- INITIAL DATA (Optional)
--- ==========================================================
--- INSERT INTO users (username, worker_id, password, role, name, hourly_rate) 
--- VALUES ('admin', 'M-001', '123', 'manager', 'Main Manager', 0.0);
