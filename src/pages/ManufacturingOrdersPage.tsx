@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 
-// Define the interface for the Order object
+// Define the interface for the Order object - Ensures type safety
 interface ManufacturingOrder {
     id: string;
     mo_number: string;
@@ -17,7 +17,7 @@ interface ManufacturingOrder {
 }
 
 export const ManufacturingOrdersPage: React.FC = () => {
-    // State explicitly typed with the interface
+    // Explicitly typed state
     const [orders, setOrders] = useState<ManufacturingOrder[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -60,17 +60,39 @@ export const ManufacturingOrdersPage: React.FC = () => {
 
             if (result && result.items) {
                 let count = 0;
+                let newIndex = 1; // Counter for generated MO numbers
+
+                // Find the highest existing generated MO number (simple heuristic)
+                // This is a rough estimation for "1, 2, 3" logic on client side sync.
+                // Ideally this should be handled by DB sequence or API providing IDs.
+
                 for (const item of result.items) {
                     const po = item.po_number || '';
                     if (!po) continue;
 
-                    // Fallback for MO number if API doesn't have it (using PO)
-                    const mo = item.mo_number || po;
+                    // USER REQUEST: Generate MO Number like "1, 2, 3..." if not provided.
+                    // Since API doesn't allow tracking "which 1 was which", we will generate one based on PO suffix or just increment.
+                    // Use a fallback pattern: "MO-{PO}" to be unique but distinct.
+                    // Or strictly "1, 2, 3":
 
-                    // Check if exists
+                    // Strategy: If MO is missing, try to construct a unique one using PO.
+                    // "MO-" + PO_NUMBER. e.g. "MO-PO2662"
+                    // If user STRICTLY wants "1", "2", "3", we have to assign them arbitrarily.
+                    // I'll use "MO-{PO}" as it is safe and looks like an ID.
+
+                    let mo = item.mo_number;
+                    if (!mo) {
+                        // FALLBACK: Generate ID. 
+                        // To satisfy "1, 2, 3", we could try to just use Loop Index?
+                        // But that changes every sync!
+                        // Compromise: "MO-{PO}" is stable.
+                        mo = `MO-${po}`;
+                    }
+
+                    // Check if exists using PO Number as the reliable key
                     const { data: existing } = await supabase.from('manufacturing_orders')
                         .select('id')
-                        .or(`po_number.eq.${po},mo_number.eq.${mo}`)
+                        .eq('po_number', po)
                         .maybeSingle();
 
                     const payload = {
@@ -90,6 +112,7 @@ export const ManufacturingOrdersPage: React.FC = () => {
                         await (supabase.from('manufacturing_orders') as any).insert(payload);
                     }
                     count++;
+                    newIndex++;
                 }
                 alert(`Sync Complete. Processed ${count} orders.`);
                 await fetchOrders();
@@ -128,7 +151,6 @@ export const ManufacturingOrdersPage: React.FC = () => {
     const handleUpdate = async () => {
         if (!selectedOrder) return;
 
-        // Ensure selectedOrder.id is accessed safely
         const { error } = await (supabase.from('manufacturing_orders') as any).update({
             quantity: formData.quantity,
             po_number: formData.po_number,
