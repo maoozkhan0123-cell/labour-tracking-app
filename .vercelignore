@@ -1,7 +1,7 @@
-.git/
-__pycache__/
-*.pyc
-instance/
-*.db
 .env
-.ipynb_checkpoints/
+.env.*
+node_modules
+legacy_backend
+.git
+.gitignore
+errors.txt
