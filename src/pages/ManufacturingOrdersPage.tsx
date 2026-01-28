@@ -42,8 +42,16 @@ export const ManufacturingOrdersPage: React.FC = () => {
 
     const fetchOrders = async () => {
         setIsLoading(true);
-        const { data } = await supabase.from('manufacturing_orders').select('*').order('created_at', { ascending: true });
-        if (data) setOrders(data as ManufacturingOrder[]);
+        const { data } = await supabase.from('manufacturing_orders').select('*');
+        if (data) {
+            // Sort numerically by MO Number to ensure 1, 2, 3... sequence specifically
+            const sorted = (data as ManufacturingOrder[]).sort((a, b) => {
+                const numA = parseInt(a.mo_number.replace(/\D/g, '')) || 0;
+                const numB = parseInt(b.mo_number.replace(/\D/g, '')) || 0;
+                return numA - numB;
+            });
+            setOrders(sorted);
+        }
         setIsLoading(false);
     };
 
@@ -76,10 +84,9 @@ export const ManufacturingOrdersPage: React.FC = () => {
                     const po = item.po_number || '';
                     if (!po) continue;
 
-                    let mo = item.mo_number;
-                    if (!mo) {
-                        mo = newIndex.toString();
-                    }
+                    // USER REQUEST: Force Strict Sequencing (1, 2, 3...)
+                    // Ignore API MO number, use our counter
+                    const mo = newIndex.toString();
 
                     const existingId = existingMap.get(po);
 
