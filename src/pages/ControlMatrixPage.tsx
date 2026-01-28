@@ -45,7 +45,7 @@ export const ControlMatrixPage: React.FC = () => {
     const fetchData = async (showLoading = false) => {
         if (showLoading) setIsLoading(true);
         try {
-            const { data: moData } = await supabase.from('manufacturing_orders').select('*').order('created_at', { ascending: false });
+            const { data: moData } = await supabase.from('manufacturing_orders').select('*').order('created_at', { ascending: true });
             const { data: opData } = await supabase.from('operations').select('*').order('sort_order', { ascending: true });
             const { data: empData } = await supabase.from('users').select('*').eq('role', 'employee').order('name', { ascending: true });
             const { data: taskData } = await supabase.from('tasks').select('*');
@@ -146,14 +146,14 @@ export const ControlMatrixPage: React.FC = () => {
             } else if (action === 'start') {
                 updates = { status: 'active', start_time: task.start_time || now, last_action_time: now };
             } else if (action === 'stop') {
-                 // Regular stop (clocked in)
-                 const diff = task.last_action_time ? Math.floor((new Date().getTime() - new Date(task.last_action_time).getTime()) / 1000) : 0;
-                 updates = {
-                     status: 'clocked_in',
-                     active_seconds: (task.active_seconds || 0) + (diff > 0 ? diff : 0),
-                     last_action_time: now
-                 };
-            } else if (action === 'pause') { 
+                // Regular stop (clocked in)
+                const diff = task.last_action_time ? Math.floor((new Date().getTime() - new Date(task.last_action_time).getTime()) / 1000) : 0;
+                updates = {
+                    status: 'clocked_in',
+                    active_seconds: (task.active_seconds || 0) + (diff > 0 ? diff : 0),
+                    last_action_time: now
+                };
+            } else if (action === 'pause') {
                 // Taking a break - Reason is now passed in
                 const diff = task.last_action_time ? Math.floor((new Date().getTime() - new Date(task.last_action_time).getTime()) / 1000) : 0;
                 updates = {
@@ -173,13 +173,13 @@ export const ControlMatrixPage: React.FC = () => {
                     last_action_time: now
                 };
             } else if (action === 'clock_out') {
-                 // Clock out logic
-                 const diff = (task.status === 'active' && task.last_action_time) ? Math.floor((new Date().getTime() - new Date(task.last_action_time).getTime()) / 1000) : 0;
-                 updates = {
-                     status: 'clocked_out',
-                     active_seconds: (task.active_seconds || 0) + (diff > 0 ? diff : 0),
-                     last_action_time: now
-                 };
+                // Clock out logic
+                const diff = (task.status === 'active' && task.last_action_time) ? Math.floor((new Date().getTime() - new Date(task.last_action_time).getTime()) / 1000) : 0;
+                updates = {
+                    status: 'clocked_out',
+                    active_seconds: (task.active_seconds || 0) + (diff > 0 ? diff : 0),
+                    last_action_time: now
+                };
             }
 
             const { error } = await (supabase.from('tasks') as any).update(updates).eq('id', taskId);
@@ -349,7 +349,7 @@ export const ControlMatrixPage: React.FC = () => {
                                     </span>
                                     <i className="fa-solid fa-chevron-down" style={{ color: '#94A3B8', fontSize: '0.75rem' }}></i>
                                 </div>
-                                
+
                                 {showWorkerDropdown && (
                                     <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, width: '100%', background: 'white', borderRadius: '10px', boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0,0,0,0.04)', zIndex: 50, overflow: 'hidden', maxHeight: '200px', overflowY: 'auto' }}>
                                         {employees.map(emp => (
@@ -422,15 +422,15 @@ export const ControlMatrixPage: React.FC = () => {
                                                     <i className="fa-solid fa-play"></i>
                                                 </button>
                                             )}
-                                            
+
                                             {(status === 'clocked_in' || status === 'active' || status === 'break') && (
                                                 <button title="Clock Out" onClick={() => performTaskAction(task.id, 'clock_out')} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: '#F1F5F9', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s' }}>
                                                     <i className="fa-solid fa-arrow-right-from-bracket"></i>
                                                 </button>
                                             )}
-                                            
+
                                             {status !== 'pending' && status !== 'completed' && (
-                                                 <button title="Complete" onClick={() => performTaskAction(task.id, 'complete')} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: '#FEE2E2', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s' }}>
+                                                <button title="Complete" onClick={() => performTaskAction(task.id, 'complete')} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: '#FEE2E2', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s' }}>
                                                     <i className="fa-solid fa-check"></i>
                                                 </button>
                                             )}
@@ -443,7 +443,7 @@ export const ControlMatrixPage: React.FC = () => {
                                 </div>
                             );
                         })}
-                        
+
                         {selectedCell && getTasksForCell(selectedCell.mo, selectedCell.op).length === 0 && (
                             <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94A3B8' }}>
                                 <i className="fa-solid fa-clipboard-user" style={{ fontSize: '2rem', marginBottom: '1rem', color: '#CBD5E1' }}></i>
@@ -481,29 +481,29 @@ export const ControlMatrixPage: React.FC = () => {
                             placeholder="e.g. Lunch Break, Meeting, Material Delay"
                             value={pauseReason}
                             onChange={(e) => { setPauseReason(e.target.value); setPauseError(''); }}
-                            style={{ 
-                                width: '100%', padding: '0.75rem', borderRadius: '8px', 
-                                border: pauseError ? '1.5px solid #EF4444' : '1.5px solid #CBD5E1', 
+                            style={{
+                                width: '100%', padding: '0.75rem', borderRadius: '8px',
+                                border: pauseError ? '1.5px solid #EF4444' : '1.5px solid #CBD5E1',
                                 fontSize: '0.95rem', outline: 'none'
                             }}
                         />
                         {pauseError && <div style={{ color: '#EF4444', fontSize: '0.8rem', marginTop: '0.25rem', fontWeight: 500 }}>{pauseError}</div>}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                        <button 
+                        <button
                             onClick={() => setIsPauseModalOpen(false)}
-                            style={{ 
-                                padding: '0.75rem', borderRadius: '8px', border: '1.5px solid #E2E8F0', 
-                                background: 'white', color: '#0F172A', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem' 
+                            style={{
+                                padding: '0.75rem', borderRadius: '8px', border: '1.5px solid #E2E8F0',
+                                background: 'white', color: '#0F172A', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem'
                             }}
                         >
                             Cancel
                         </button>
-                        <button 
+                        <button
                             onClick={confirmPause}
-                            style={{ 
-                                padding: '0.75rem', borderRadius: '8px', border: 'none', 
-                                background: '#0F172A', color: 'white', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem' 
+                            style={{
+                                padding: '0.75rem', borderRadius: '8px', border: 'none',
+                                background: '#0F172A', color: 'white', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem'
                             }}
                         >
                             Confirm Pause
@@ -512,7 +512,7 @@ export const ControlMatrixPage: React.FC = () => {
                 </div>
             </div>
 
-            {(isAssignOpen || isPauseModalOpen) && <div className="overlay active" onClick={() => { if(isPauseModalOpen) setIsPauseModalOpen(false); else closeAssign(); }} style={{ zIndex: 2550 }}></div>}
+            {(isAssignOpen || isPauseModalOpen) && <div className="overlay active" onClick={() => { if (isPauseModalOpen) setIsPauseModalOpen(false); else closeAssign(); }} style={{ zIndex: 2550 }}></div>}
         </>
     );
 };

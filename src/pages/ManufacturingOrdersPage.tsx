@@ -48,7 +48,7 @@ export const ManufacturingOrdersPage: React.FC = () => {
     };
 
     const handleSync = async () => {
-        if (!confirm('Fetch latest orders from Odoo? This will update existing records.')) return;
+        if (!confirm('Fetch latest orders? This will update existing records.')) return;
         setIsLoading(true);
         try {
             const response = await fetch('/api/sync-odoo');
@@ -56,7 +56,21 @@ export const ManufacturingOrdersPage: React.FC = () => {
 
             if (result && result.items) {
                 let count = 0;
-                let newIndex = 1; // Counter for generated MO numbers
+                let newIndex = 1;
+
+                // Bulk fetch existing existing PO numbers
+                const newItemPOs = result.items.map((i: any) => i.po_number).filter(Boolean);
+                const { data: existingData } = await supabase.from('manufacturing_orders')
+                    .select('id, po_number')
+                    .in('po_number', newItemPOs);
+
+                // Map PO number -> Order ID for quick lookup
+                const existingMap = new Map();
+                existingData?.forEach((row: any) => {
+                    existingMap.set(row.po_number, row.id);
+                });
+
+                const promises: Promise<any>[] = [];
 
                 for (const item of result.items) {
                     const po = item.po_number || '';
@@ -64,22 +78,10 @@ export const ManufacturingOrdersPage: React.FC = () => {
 
                     let mo = item.mo_number;
                     if (!mo) {
-                        // USER REQUEST: Generate MO Number explicitly as "1", "2", "3"...
-                        // Since we need to persist this, this is tricky if we sync multiple times.
-                        // But PER REQUEST, we will just use the index for now. 
-                        // Note: This will restart from 1 every time unless we check DB.
-                        // To be safer for display, we'll try to just use the loop index.
                         mo = newIndex.toString();
                     }
 
-                    // Check if exists using PO Number as the reliable key
-                    const { data: existing } = await supabase.from('manufacturing_orders')
-                        .select('id')
-                        .eq('po_number', po)
-                        .maybeSingle();
-
-                    // Retrieve existing ID if present
-                    const existingId = existing ? (existing as any).id : null;
+                    const existingId = existingMap.get(po);
 
                     const payload = {
                         mo_number: mo,
@@ -92,14 +94,19 @@ export const ManufacturingOrdersPage: React.FC = () => {
                         current_status: item.current_status
                     };
 
+                    // Add operation to promises array for parallel execution
                     if (existingId) {
-                        await (supabase.from('manufacturing_orders') as any).update(payload).eq('id', existingId);
+                        promises.push((supabase.from('manufacturing_orders') as any).update(payload).eq('id', existingId));
                     } else {
-                        await (supabase.from('manufacturing_orders') as any).insert(payload);
+                        promises.push((supabase.from('manufacturing_orders') as any).insert(payload));
                     }
                     count++;
                     newIndex++;
                 }
+
+                // Execute all updates/inserts in parallel
+                await Promise.all(promises);
+
                 alert(`Sync Complete. Processed ${count} orders.`);
                 await fetchOrders();
             }
@@ -210,10 +217,6 @@ export const ManufacturingOrdersPage: React.FC = () => {
                     <button className="btn btn-secondary" onClick={handleSync}
                         style={{ width: 'auto', padding: '0.75rem 1.0rem', background: '#F1F5F9', color: '#0F172A', border: '1px solid #E2E8F0', borderRadius: '8px', fontWeight: 600 }}>
                         <i className="fa-solid fa-arrows-rotate" style={{ marginRight: '8px' }}></i> Sync Orders
-                    </button>
-                    <button className="btn btn-primary" onClick={() => { resetForm(); setIsAddOpen(true); }}
-                        style={{ width: 'auto', padding: '0.75rem 1.5rem', background: '#000', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600 }}>
-                        <i className="fa-solid fa-plus"></i> Create Order
                     </button>
                 </div>
             </div>
