@@ -45,12 +45,19 @@ export const ControlMatrixPage: React.FC = () => {
     const fetchData = async (showLoading = false) => {
         if (showLoading) setIsLoading(true);
         try {
-            const { data: moData } = await supabase.from('manufacturing_orders').select('*').order('created_at', { ascending: true });
+            const { data: moData } = await supabase.from('manufacturing_orders').select('*');
             const { data: opData } = await supabase.from('operations').select('*').order('sort_order', { ascending: true });
             const { data: empData } = await supabase.from('users').select('*').eq('role', 'employee').order('name', { ascending: true });
             const { data: taskData } = await supabase.from('tasks').select('*');
 
-            if (moData) setMos(moData);
+            if (moData) {
+                const sortedMos = (moData as any[]).sort((a, b) => {
+                    const numA = parseInt(a.mo_number.replace(/\D/g, '')) || 0;
+                    const numB = parseInt(b.mo_number.replace(/\D/g, '')) || 0;
+                    return numA - numB;
+                });
+                setMos(sortedMos);
+            }
             if (opData) setOperations(opData.map((o: any) => o.name));
             if (empData) setEmployees(empData);
             if (taskData) setTasks(taskData);
@@ -255,7 +262,7 @@ export const ControlMatrixPage: React.FC = () => {
                         <div key={mo.id} className="matrix-row" id={`mo-${mo.mo_number}`}>
                             <div className="matrix-label-cell" style={{ width: '200px' }}>
                                 <Link to="/manufacturing-orders" className="mo-badge" style={{ textDecoration: 'none' }}>{mo.mo_number}</Link>
-                                <div className="mo-details" style={{ fontSize: '0.8rem' }}>{mo.product_name}</div>
+                                <div className="mo-details" style={{ fontSize: '0.9rem', fontWeight: 800, color: '#000000', marginTop: '4px' }}>{mo.product_name}</div>
                                 <div style={{ marginTop: '4px' }}>
                                     <span className={`status-badge badge-${(mo.current_status || 'draft').toLowerCase()}`}>{mo.current_status}</span>
                                 </div>
