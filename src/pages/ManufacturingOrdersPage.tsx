@@ -44,8 +44,11 @@ export const ManufacturingOrdersPage: React.FC = () => {
         setIsLoading(true);
         const { data } = await supabase.from('manufacturing_orders').select('*');
         if (data) {
-            // Sort numerically by MO Number to ensure 1, 2, 3... sequence specifically
-            const sorted = (data as ManufacturingOrder[]).sort((a, b) => {
+            // Filter out Greenlit orders immediately
+            const activeOnly = (data as ManufacturingOrder[]).filter(o => (o.current_status || '').toLowerCase() !== 'greenlit');
+
+            // Sort numerically by MO Number
+            const sorted = activeOnly.sort((a, b) => {
                 const numA = parseInt(a.mo_number.replace(/\D/g, '')) || 0;
                 const numB = parseInt(b.mo_number.replace(/\D/g, '')) || 0;
                 return numA - numB;
@@ -83,6 +86,9 @@ export const ManufacturingOrdersPage: React.FC = () => {
                 for (const item of result.items) {
                     const po = item.po_number || '';
                     if (!po) continue;
+
+                    // USER REQUEST: Skip orders with status 'Greenlit'
+                    if (item.current_status && item.current_status.toLowerCase() === 'greenlit') continue;
 
                     // USER REQUEST: Force Strict Sequencing (1, 2, 3...)
                     // Ignore API MO number, use our counter

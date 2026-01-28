@@ -22,20 +22,26 @@ export const WorkersPage: React.FC = () => {
     };
 
     const handleHire = async () => {
-        if (!formData.name || !formData.username || !formData.rate || !formData.password || !formData.worker_id) return alert('Please fill all fields');
+        if (!formData.name || !formData.username || !formData.rate || !formData.worker_id) return alert('Please fill all fields');
+
+        // Auto-generate a default password since the field was removed
+        const defaultPassword = 'worker' + Math.floor(1000 + Math.random() * 9000);
+
         const { error } = await (supabase.from('users') as any).insert({
             name: formData.name,
             username: formData.username,
             worker_id: formData.worker_id,
             hourly_rate: parseFloat(formData.rate),
-            password: formData.password,
-            role: 'employee',
-            active: formData.active
+            password: defaultPassword, // Set default password
+            role: 'employee'
         });
+
         if (!error) {
             setIsAddOpen(false);
             resetForm();
             fetchWorkers();
+        } else {
+            alert('Error creating worker: ' + error.message);
         }
     };
 
@@ -45,8 +51,7 @@ export const WorkersPage: React.FC = () => {
             name: formData.name,
             username: formData.username,
             worker_id: formData.worker_id,
-            hourly_rate: parseFloat(formData.rate),
-            active: formData.active
+            hourly_rate: parseFloat(formData.rate)
         }).eq('id', selectedWorker.id);
         if (!error) {
             setIsEditOpen(false);
@@ -79,8 +84,8 @@ export const WorkersPage: React.FC = () => {
         setIsEditOpen(true);
     };
 
-    const filteredWorkers = workers.filter(w => 
-        w.name?.toLowerCase().includes(search.toLowerCase()) || 
+    const filteredWorkers = workers.filter(w =>
+        w.name?.toLowerCase().includes(search.toLowerCase()) ||
         w.worker_id?.toLowerCase().includes(search.toLowerCase()) ||
         w.username?.toLowerCase().includes(search.toLowerCase())
     );
@@ -103,12 +108,12 @@ export const WorkersPage: React.FC = () => {
             <div style={{ marginBottom: '2rem' }}>
                 <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
                     <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', left: '15px', top: '12px', color: '#9CA3AF' }}></i>
-                    <input 
-                        type="text" 
+                    <input
+                        type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search workers..." 
-                        style={{ width: '100%', padding: '0.7rem 1rem 0.7rem 2.5rem', borderRadius: '8px', border: '1px solid var(--border)' }} 
+                        placeholder="Search workers..."
+                        style={{ width: '100%', padding: '0.7rem 1rem 0.7rem 2.5rem', borderRadius: '8px', border: '1px solid var(--border)' }}
                     />
                 </div>
             </div>
@@ -171,10 +176,7 @@ export const WorkersPage: React.FC = () => {
                         <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#111', fontSize: '0.95rem' }}>Hourly Rate ($)</label>
                         <input type="number" value={formData.rate} onChange={e => setFormData({ ...formData, rate: e.target.value })} placeholder="0.00" style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1.5px solid #DDD' }} />
                     </div>
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#111', fontSize: '0.95rem' }}>Password</label>
-                        <input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="Set login password" style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1.5px solid #DDD' }} />
-                    </div>
+
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
                         <button className="btn" onClick={() => setIsAddOpen(false)} style={{ width: 'auto', padding: '0.75rem 1.75rem', borderRadius: '8px', border: '1.5px solid #DDD', background: 'white' }}>Cancel</button>
                         <button className="btn" onClick={handleHire} style={{ width: 'auto', padding: '0.75rem 1.75rem', borderRadius: '8px', border: 'none', background: '#111', color: 'white' }}>Create</button>
