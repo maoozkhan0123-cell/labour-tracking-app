@@ -42,7 +42,7 @@ export const ManufacturingOrdersPage: React.FC = () => {
 
     const fetchOrders = async () => {
         setIsLoading(true);
-        const { data } = await supabase.from('manufacturing_orders').select('*').order('created_at', { ascending: false });
+        const { data } = await supabase.from('manufacturing_orders').select('*').order('created_at', { ascending: true });
         if (data) setOrders(data as ManufacturingOrder[]);
         setIsLoading(false);
     };
