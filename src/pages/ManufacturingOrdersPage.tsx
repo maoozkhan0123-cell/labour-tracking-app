@@ -23,8 +23,7 @@ export const ManufacturingOrdersPage: React.FC = () => {
     const [search, setSearch] = useState('');
 
     const [isAddOpen, setIsAddOpen] = useState(false);
-    const [isEditOpen, setIsEditOpen] = useState(false);
-    const [selectedOrder, setSelectedOrder] = useState<ManufacturingOrder | null>(null);
+
 
     // Updated formData structure
     const [formData, setFormData] = useState({
@@ -154,47 +153,13 @@ export const ManufacturingOrdersPage: React.FC = () => {
         }
     };
 
-    const handleUpdate = async () => {
-        if (!selectedOrder) return;
-
-        const { error } = await (supabase.from('manufacturing_orders') as any).update({
-            quantity: formData.quantity,
-            po_number: formData.po_number,
-            product_name: formData.product_name,
-            sku: formData.sku,
-            event_id: formData.event_id,
-            scheduled_date: formData.scheduled_date || null,
-            current_status: formData.current_status
-        }).eq('id', selectedOrder.id);
-
-        if (!error) {
-            setIsEditOpen(false);
-            fetchOrders();
-        } else {
-            alert('Error updating order: ' + error.message);
-        }
-    };
-
     const handleDelete = async (id: string) => {
         if (!confirm('Are you sure you want to delete this order?')) return;
         const { error } = await supabase.from('manufacturing_orders').delete().eq('id', id);
         if (!error) fetchOrders();
     };
 
-    const openEdit = (order: ManufacturingOrder) => {
-        setSelectedOrder(order);
-        setFormData({
-            mo_number: order.mo_number || '',
-            quantity: order.quantity || 0,
-            po_number: order.po_number || '',
-            product_name: order.product_name || '',
-            sku: order.sku || '',
-            event_id: order.event_id || '',
-            scheduled_date: order.scheduled_date || '',
-            current_status: order.current_status || 'Draft'
-        });
-        setIsEditOpen(true);
-    };
+
 
     const resetForm = () => {
         setFormData({
@@ -283,7 +248,6 @@ export const ManufacturingOrdersPage: React.FC = () => {
                                     <Link to={`/control-matrix#mo-${order.mo_number}`} className="icon-btn" title="View Matrix" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                                         <i className="fa-solid fa-table-cells"></i>
                                     </Link>
-                                    <button className="icon-btn" title="Edit" onClick={() => openEdit(order)}><i className="fa-solid fa-pen"></i></button>
                                     <button className="icon-btn delete" title="Delete" onClick={() => handleDelete(order.id)}><i className="fa-regular fa-trash-can"></i></button>
                                 </td>
                             </tr>
@@ -293,16 +257,16 @@ export const ManufacturingOrdersPage: React.FC = () => {
             </div>
 
             {/* Add/Edit Modal */}
-            <div className={`offcanvas ${isAddOpen || isEditOpen ? 'show' : ''}`} style={{
+            <div className={`offcanvas ${isAddOpen ? 'show' : ''}`} style={{
                 right: 'auto', left: '50%', top: '50%', transform: `translate(-50%, -50%)`,
                 width: '600px', height: 'auto', maxHeight: '90vh', overflowY: 'auto',
-                borderRadius: '12px', opacity: (isAddOpen || isEditOpen) ? 1 : 0,
-                pointerEvents: (isAddOpen || isEditOpen) ? 'all' : 'none',
+                borderRadius: '12px', opacity: (isAddOpen) ? 1 : 0,
+                pointerEvents: (isAddOpen) ? 'all' : 'none',
                 transition: 'opacity 0.2s', zIndex: 3001, background: 'white', position: 'fixed'
             }}>
                 <div className="offcanvas-header" style={{ marginBottom: '1rem', padding: '2rem 2rem 0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 className="offcanvas-title" style={{ fontSize: '1.25rem', fontWeight: 700 }}>{isEditOpen ? 'Edit Order' : 'Create New Order'}</h3>
-                    <button className="close-btn" onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>
+                    <h3 className="offcanvas-title" style={{ fontSize: '1.25rem', fontWeight: 700 }}>Create New Order</h3>
+                    <button className="close-btn" onClick={() => { setIsAddOpen(false); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }}>
                         <i className="fa-solid fa-xmark"></i>
                     </button>
                 </div>
@@ -311,9 +275,9 @@ export const ManufacturingOrdersPage: React.FC = () => {
                         <div style={{ gridColumn: 'span 2' }}>
                             <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#475569' }}>MO Number</label>
                             <input type="text" value={formData.mo_number} onChange={e => setFormData({ ...formData, mo_number: e.target.value })}
-                                disabled={isEditOpen}
+                                disabled={false}
                                 placeholder="e.g. WH/MO/001"
-                                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1.5px solid var(--border)', background: isEditOpen ? '#F8FAFC' : 'white' }}
+                                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1.5px solid var(--border)', background: 'white' }}
                             />
                         </div>
                         <div style={{ gridColumn: 'span 2' }}>
@@ -376,15 +340,15 @@ export const ManufacturingOrdersPage: React.FC = () => {
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '2rem' }}>
-                        <button className="btn btn-secondary" onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }}>Cancel</button>
-                        <button className="btn btn-primary" onClick={isEditOpen ? handleUpdate : handleCreate}>
-                            {isEditOpen ? 'Update Order' : 'Create Order'}
+                        <button className="btn btn-secondary" onClick={() => { setIsAddOpen(false); }}>Cancel</button>
+                        <button className="btn btn-primary" onClick={handleCreate}>
+                            Create Order
                         </button>
                     </div>
                 </div>
             </div>
 
-            {(isAddOpen || isEditOpen) && <div className="overlay active" style={{ zIndex: 1000 }} onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }}></div>}
+            {(isAddOpen) && <div className="overlay active" style={{ zIndex: 1000 }} onClick={() => { setIsAddOpen(false); }}></div>}
         </>
     );
 };

@@ -80,14 +80,23 @@ export const ControlTablePage: React.FC = () => {
         }
         const h = Math.floor(total / 3600);
         const m = Math.floor((total % 3600) / 60);
-        // Showing HH:MM
-        return [h, m].map(v => v < 10 ? "0" + v : v).join(":");
+        const s = total % 60;
+        return [h, m, s].map(v => v < 10 ? "0" + v : v).join(":");
     };
 
     const formatTimeOnly = (isoString: string) => {
         if (!isoString) return '-';
         const d = new Date(isoString);
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase();
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }).toUpperCase();
+    };
+
+    const formatDateTime = (isoString: string) => {
+        if (!isoString) return '-';
+        const d = new Date(isoString);
+        return d.toLocaleString([], {
+            month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+        }).toUpperCase();
     };
 
     const getStatusLabel = (status: string) => {
@@ -102,7 +111,7 @@ export const ControlTablePage: React.FC = () => {
 
     const handleEditClick = (task: any) => {
         setEditingTask(task);
-        
+
         // Convert seconds to H:M
         const totalSec = task.active_seconds || 0;
         const h = Math.floor(totalSec / 3600);
@@ -137,10 +146,10 @@ export const ControlTablePage: React.FC = () => {
         } else if (editForm.status !== 'completed') {
             updates.end_time = null; // Clear end time if not completed
         }
-        
+
         // Also update last_action_time if provided for other statuses
         if (editForm.end_time) {
-             updates.last_action_time = new Date(editForm.end_time).toISOString();
+            updates.last_action_time = new Date(editForm.end_time).toISOString();
         }
 
         try {
@@ -200,7 +209,7 @@ export const ControlTablePage: React.FC = () => {
             setIsCreateOpen(false);
             fetchData();
         } catch (e: any) {
-             alert('Error creating task: ' + e.message);
+            alert('Error creating task: ' + e.message);
         }
     };
 
@@ -208,16 +217,16 @@ export const ControlTablePage: React.FC = () => {
         const matchesSearch = t.mo_reference.toLowerCase().includes(search.toLowerCase()) ||
             t.description.toLowerCase().includes(search.toLowerCase()) ||
             t.worker_name.toLowerCase().includes(search.toLowerCase());
-        
+
         const matchesWorker = workerFilter === 'all' || t.worker_name === workerFilter;
-        
+
         const matchesStatus = statusFilter === 'all' ||
             (statusFilter === 'timer running' && t.status === 'active') ||
             (statusFilter === 'on break' && t.status === 'break') ||
             (statusFilter === 'clocked in' && t.status === 'clocked_in') ||
             (statusFilter === 'completed' && t.status === 'completed') ||
             (statusFilter === 'pending' && t.status === 'pending');
-            
+
         return matchesSearch && matchesWorker && matchesStatus;
     });
 
@@ -301,7 +310,9 @@ export const ControlTablePage: React.FC = () => {
                                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Name</th>
                                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700, color: '#475569' }}>MO</th>
                                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Operation</th>
+                                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Clock In</th>
                                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Start Time</th>
+                                <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Clock Out</th>
                                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Last Action</th>
                                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Duration</th>
                                 <th style={{ padding: '0.75rem 1rem', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Status</th>
@@ -325,10 +336,16 @@ export const ControlTablePage: React.FC = () => {
                                     </td>
                                     <td style={{ padding: '0.75rem 1rem', color: '#475569' }}>{task.description}</td>
                                     <td style={{ padding: '0.75rem 1rem', color: '#64748B', fontSize: '0.85rem', fontWeight: 500 }}>
+                                        {formatDateTime(task.created_at)}
+                                    </td>
+                                    <td style={{ padding: '0.75rem 1rem', color: '#64748B', fontSize: '0.85rem', fontWeight: 500 }}>
                                         {formatTimeOnly(task.start_time)}
                                     </td>
                                     <td style={{ padding: '0.75rem 1rem', color: '#64748B', fontSize: '0.85rem', fontWeight: 500 }}>
-                                        {formatTimeOnly(task.last_action_time || task.end_time)}
+                                        {formatDateTime(task.end_time)}
+                                    </td>
+                                    <td style={{ padding: '0.75rem 1rem', color: '#64748B', fontSize: '0.85rem', fontWeight: 500 }}>
+                                        {formatTimeOnly(task.last_action_time)}
                                     </td>
                                     <td style={{ padding: '0.75rem 1rem' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -339,7 +356,7 @@ export const ControlTablePage: React.FC = () => {
                                     </td>
                                     <td style={{ padding: '0.75rem 1rem' }}>{getStatusLabel(task.status)}</td>
                                     <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
-                                        <button 
+                                        <button
                                             onClick={() => handleEditClick(task)}
                                             className="icon-btn"
                                             style={{ color: '#475569', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0.5rem' }}
@@ -355,11 +372,11 @@ export const ControlTablePage: React.FC = () => {
             </div>
 
             {/* Edit Modal (Compact) */}
-            <div className={`offcanvas ${isEditOpen ? 'show' : ''}`} style={{ 
-                right: 'auto', left: '50%', top: '50%', transform: `translate(-50%, -50%)`, 
-                width: '500px', height: 'auto', maxHeight: '90vh', overflowY: 'auto', 
-                borderRadius: '12px', opacity: isEditOpen ? 1 : 0, 
-                pointerEvents: isEditOpen ? 'all' : 'none', 
+            <div className={`offcanvas ${isEditOpen ? 'show' : ''}`} style={{
+                right: 'auto', left: '50%', top: '50%', transform: `translate(-50%, -50%)`,
+                width: '500px', height: 'auto', maxHeight: '90vh', overflowY: 'auto',
+                borderRadius: '12px', opacity: isEditOpen ? 1 : 0,
+                pointerEvents: isEditOpen ? 'all' : 'none',
                 transition: 'opacity 0.2s', zIndex: 3001, background: 'white', position: 'fixed',
                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
             }}>
@@ -388,20 +405,20 @@ export const ControlTablePage: React.FC = () => {
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div>
                                     <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Start Time</label>
-                                    <input 
-                                        type="datetime-local" 
-                                        value={editForm.start_time} 
+                                    <input
+                                        type="datetime-local"
+                                        value={editForm.start_time}
                                         onChange={e => setEditForm(prev => ({ ...prev, start_time: e.target.value }))}
-                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }} 
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
                                     />
                                 </div>
                                 <div>
                                     <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>End/Last Action</label>
-                                    <input 
-                                        type="datetime-local" 
-                                        value={editForm.end_time} 
+                                    <input
+                                        type="datetime-local"
+                                        value={editForm.end_time}
                                         onChange={e => setEditForm(prev => ({ ...prev, end_time: e.target.value }))}
-                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }} 
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
                                     />
                                 </div>
                             </div>
@@ -410,21 +427,21 @@ export const ControlTablePage: React.FC = () => {
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Total Duration (Allocated)</label>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <input 
-                                            type="number" 
-                                            value={editForm.active_hours} 
+                                        <input
+                                            type="number"
+                                            value={editForm.active_hours}
                                             onChange={e => setEditForm(prev => ({ ...prev, active_hours: parseInt(e.target.value) || 0 }))}
-                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }} 
+                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
                                         />
                                         <span style={{ fontSize: '0.85rem', color: '#64748B' }}>hrs</span>
                                     </div>
                                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <input 
-                                            type="number" 
-                                            value={editForm.active_minutes} 
+                                        <input
+                                            type="number"
+                                            value={editForm.active_minutes}
                                             onChange={e => setEditForm(prev => ({ ...prev, active_minutes: parseInt(e.target.value) || 0 }))}
                                             max="59"
-                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }} 
+                                            style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
                                         />
                                         <span style={{ fontSize: '0.85rem', color: '#64748B' }}>mins</span>
                                     </div>
@@ -433,8 +450,8 @@ export const ControlTablePage: React.FC = () => {
 
                             <div>
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Status</label>
-                                <select 
-                                    value={editForm.status} 
+                                <select
+                                    value={editForm.status}
                                     onChange={e => setEditForm(prev => ({ ...prev, status: e.target.value }))}
                                     style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
                                 >
@@ -456,11 +473,11 @@ export const ControlTablePage: React.FC = () => {
             </div>
 
             {/* Create Manual Entry Modal */}
-            <div className={`offcanvas ${isCreateOpen ? 'show' : ''}`} style={{ 
-                right: 'auto', left: '50%', top: '50%', transform: `translate(-50%, -50%)`, 
-                width: '500px', height: 'auto', maxHeight: '90vh', overflowY: 'auto', 
-                borderRadius: '12px', opacity: isCreateOpen ? 1 : 0, 
-                pointerEvents: isCreateOpen ? 'all' : 'none', 
+            <div className={`offcanvas ${isCreateOpen ? 'show' : ''}`} style={{
+                right: 'auto', left: '50%', top: '50%', transform: `translate(-50%, -50%)`,
+                width: '700px', height: 'auto',
+                borderRadius: '12px', opacity: isCreateOpen ? 1 : 0,
+                pointerEvents: isCreateOpen ? 'all' : 'none',
                 transition: 'opacity 0.2s', zIndex: 3001, background: 'white', position: 'fixed',
                 boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
             }}>
@@ -472,111 +489,114 @@ export const ControlTablePage: React.FC = () => {
                 </div>
                 <div className="offcanvas-body" style={{ padding: '0 1.5rem 1.5rem' }}>
                     <div style={{ display: 'grid', gap: '1rem' }}>
-                        
-                        {/* Worker Selection */}
-                        <div>
-                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Worker</label>
-                            <select 
-                                value={createForm.worker_id} 
-                                onChange={e => setCreateForm(prev => ({ ...prev, worker_id: e.target.value }))}
-                                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem', background: 'white' }}
-                            >
-                                <option value="">Select Worker...</option>
-                                {employees.map(e => (
-                                    <option key={e.id} value={e.id}>{e.name}</option>
-                                ))}
-                            </select>
+
+                        {/* Row 1: Worker & MO */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Worker</label>
+                                <select
+                                    value={createForm.worker_id}
+                                    onChange={e => setCreateForm(prev => ({ ...prev, worker_id: e.target.value }))}
+                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem', background: 'white' }}
+                                >
+                                    <option value="">Select Worker...</option>
+                                    {employees.map(e => (
+                                        <option key={e.id} value={e.id}>{e.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Manufacturing Order</label>
+                                <select
+                                    value={createForm.mo_reference}
+                                    onChange={e => setCreateForm(prev => ({ ...prev, mo_reference: e.target.value }))}
+                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem', background: 'white' }}
+                                >
+                                    <option value="">Select MO...</option>
+                                    {mos.map(m => (
+                                        <option key={m.id} value={m.mo_number}>{m.mo_number} - {m.product_name}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
 
-                        {/* MO Selection */}
-                        <div>
-                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Manufacturing Order</label>
-                            <select 
-                                value={createForm.mo_reference} 
-                                onChange={e => setCreateForm(prev => ({ ...prev, mo_reference: e.target.value }))}
-                                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem', background: 'white' }}
-                            >
-                                <option value="">Select MO...</option>
-                                {mos.map(m => (
-                                    <option key={m.id} value={m.mo_number}>{m.mo_number} - {m.product_name}</option>
-                                ))}
-                            </select>
+                        {/* Row 2: Operation & Status */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Operation</label>
+                                <select
+                                    value={createForm.description}
+                                    onChange={e => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
+                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem', background: 'white' }}
+                                >
+                                    <option value="">Select Operation...</option>
+                                    {operations.map(o => (
+                                        <option key={o.id} value={o.name}>{o.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Initial Status</label>
+                                <select
+                                    value={createForm.status}
+                                    onChange={e => setCreateForm(prev => ({ ...prev, status: e.target.value }))}
+                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
+                                >
+                                    <option value="pending">Pending</option>
+                                    <option value="clocked_in">Clocked In</option>
+                                    <option value="active">Timer Running</option>
+                                    <option value="break">On Break</option>
+                                    <option value="completed">Completed</option>
+                                </select>
+                            </div>
                         </div>
 
-                         {/* Operation Selection */}
-                         <div>
-                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Operation</label>
-                            <select 
-                                value={createForm.description} 
-                                onChange={e => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
-                                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem', background: 'white' }}
-                            >
-                                <option value="">Select Operation...</option>
-                                {operations.map(o => (
-                                    <option key={o.id} value={o.name}>{o.name}</option>
-                                ))}
-                            </select>
-                        </div>
-
+                        {/* Row 3: Times */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                             <div>
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Start Time</label>
-                                <input 
-                                    type="datetime-local" 
-                                    value={createForm.start_time} 
+                                <input
+                                    type="datetime-local"
+                                    value={createForm.start_time}
                                     onChange={e => setCreateForm(prev => ({ ...prev, start_time: e.target.value }))}
-                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }} 
+                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
                                 />
                             </div>
                             <div>
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>End Time (Optional)</label>
-                                <input 
-                                    type="datetime-local" 
-                                    value={createForm.end_time} 
+                                <input
+                                    type="datetime-local"
+                                    value={createForm.end_time}
                                     onChange={e => setCreateForm(prev => ({ ...prev, end_time: e.target.value }))}
-                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }} 
+                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
                                 />
                             </div>
                         </div>
 
+                        {/* Row 4: Duration */}
                         <div>
                             <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Total Duration (Initial)</label>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <input 
-                                        type="number" 
-                                        value={createForm.active_hours} 
+                                    <input
+                                        type="number"
+                                        value={createForm.active_hours}
                                         onChange={e => setCreateForm(prev => ({ ...prev, active_hours: parseInt(e.target.value) || 0 }))}
-                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }} 
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
                                     />
                                     <span style={{ fontSize: '0.85rem', color: '#64748B' }}>hrs</span>
                                 </div>
                                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <input 
-                                        type="number" 
-                                        value={createForm.active_minutes} 
+                                    <input
+                                        type="number"
+                                        value={createForm.active_minutes}
                                         onChange={e => setCreateForm(prev => ({ ...prev, active_minutes: parseInt(e.target.value) || 0 }))}
                                         max="59"
-                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }} 
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
                                     />
                                     <span style={{ fontSize: '0.85rem', color: '#64748B' }}>mins</span>
                                 </div>
                             </div>
-                        </div>
-
-                        <div>
-                            <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Initial Status</label>
-                            <select 
-                                value={createForm.status} 
-                                onChange={e => setCreateForm(prev => ({ ...prev, status: e.target.value }))}
-                                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
-                            >
-                                <option value="pending">Pending</option>
-                                <option value="clocked_in">Clocked In</option>
-                                <option value="active">Timer Running</option>
-                                <option value="break">On Break</option>
-                                <option value="completed">Completed</option>
-                            </select>
                         </div>
 
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>

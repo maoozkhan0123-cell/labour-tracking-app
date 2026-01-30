@@ -14,11 +14,13 @@ export const ControlMatrixPage: React.FC = () => {
     const [selectedWorkerId, setSelectedWorkerId] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [showWorkerDropdown, setShowWorkerDropdown] = useState(false);
+    const [manualRate, setManualRate] = useState<number>(0);
 
     // Pause Reason Modal State
     const [isPauseModalOpen, setIsPauseModalOpen] = useState(false);
     const [pauseTaskId, setPauseTaskId] = useState<string | null>(null);
     const [pauseReason, setPauseReason] = useState('');
+    const [pauseReasonType, setPauseReasonType] = useState('Lunch'); // Default selection
     const [pauseError, setPauseError] = useState('');
 
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -84,17 +86,22 @@ export const ControlMatrixPage: React.FC = () => {
         setShowWorkerDropdown(false);
     };
 
+    const handleWorkerSelect = (emp: any) => {
+        setSelectedWorkerId(emp.id);
+        setManualRate(emp.hourly_rate || 0);
+        setShowWorkerDropdown(false);
+    };
+
     const assignSingleWorker = async () => {
         if (!selectedCell || !selectedWorkerId) return;
         setIsSaving(true);
         try {
-            const emp = employees.find(e => e.id === selectedWorkerId);
             const { error } = await (supabase.from('tasks') as any).insert({
                 mo_reference: selectedCell.mo,
                 description: selectedCell.op,
                 assigned_to_id: selectedWorkerId,
                 status: 'pending',
-                hourly_rate: emp?.hourly_rate || 0,
+                hourly_rate: manualRate,
                 active_seconds: 0,
                 break_seconds: 0,
                 total_duration_seconds: 0,
@@ -103,6 +110,7 @@ export const ControlMatrixPage: React.FC = () => {
             if (error) throw error;
             await fetchData(false);
             setSelectedWorkerId('');
+            setManualRate(0);
         } catch (err) {
             console.error('Error assigning worker:', err);
         } finally {
@@ -123,21 +131,29 @@ export const ControlMatrixPage: React.FC = () => {
 
     const openPauseModal = (taskId: string) => {
         setPauseTaskId(taskId);
-        setPauseReason('');
+        const currentTask = tasks.find(t => t.id === taskId);
+        setPauseReasonType('Lunch'); // Reset to default
+        setPauseReason(currentTask?.reason || '');
         setPauseError('');
         setIsPauseModalOpen(true);
     };
 
     const confirmPause = async () => {
-        if (!pauseReason.trim()) {
-            setPauseError('Reason is required');
-            return;
+        if (!pauseTaskId) return;
+
+        // Determine final reason
+        let finalReason = pauseReasonType;
+        if (pauseReasonType === 'Other') {
+            finalReason = pauseReason.trim(); // Use custom input
+            if (!finalReason) {
+                setPauseError('Please specify a reason');
+                return;
+            }
         }
-        if (pauseTaskId) {
-            await performTaskAction(pauseTaskId, 'pause', pauseReason);
-            setIsPauseModalOpen(false);
-            setPauseTaskId(null);
-        }
+
+        await performTaskAction(pauseTaskId, 'pause', finalReason);
+        setIsPauseModalOpen(false);
+        setPauseTaskId(null);
     };
 
     const performTaskAction = async (taskId: string, action: string, reason?: string) => {
@@ -185,6 +201,7 @@ export const ControlMatrixPage: React.FC = () => {
                 updates = {
                     status: 'clocked_out',
                     active_seconds: (task.active_seconds || 0) + (diff > 0 ? diff : 0),
+                    end_time: now, // Update end_time on clock_out
                     last_action_time: now
                 };
             }
@@ -209,7 +226,6 @@ export const ControlMatrixPage: React.FC = () => {
         return [h, m, s].map(v => v < 10 ? "0" + v : v).join(":");
     };
 
-    // Helper for minimalistic status dots
     const getStatusIndicator = (status: string) => {
         const s = (status || 'pending').toLowerCase();
         let color = '#94A3B8'; // gray
@@ -263,8 +279,14 @@ export const ControlMatrixPage: React.FC = () => {
                             <div className="matrix-label-cell" style={{ width: '200px' }}>
                                 <Link to="/manufacturing-orders" className="mo-badge" style={{ textDecoration: 'none' }}>{mo.mo_number}</Link>
                                 <div className="mo-details" style={{ fontSize: '0.9rem', fontWeight: 800, color: '#000000', marginTop: '4px' }}>{mo.product_name}</div>
-                                <div style={{ marginTop: '4px' }}>
-                                    <span className={`status-badge badge-${(mo.current_status || 'draft').toLowerCase()}`}>{mo.current_status}</span>
+
+                                <div style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <div><span style={{ fontWeight: 600 }}>PO:</span> {mo.po_number || '-'}</div>
+                                    <div><span style={{ fontWeight: 600 }}>Qty:</span> {mo.quantity || 0}</div>
+                                    <div><span style={{ fontWeight: 600 }}>SKU:</span> {mo.sku || '-'}</div>
+                                    <div style={{ marginTop: '4px' }}>
+                                        <span className={`status-badge badge-${(mo.current_status || 'draft').toLowerCase()}`}>{mo.current_status}</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -360,7 +382,7 @@ export const ControlMatrixPage: React.FC = () => {
                                 {showWorkerDropdown && (
                                     <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, width: '100%', background: 'white', borderRadius: '10px', boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0,0,0,0.04)', zIndex: 50, overflow: 'hidden', maxHeight: '200px', overflowY: 'auto' }}>
                                         {employees.map(emp => (
-                                            <div key={emp.id} onClick={() => { setSelectedWorkerId(emp.id); setShowWorkerDropdown(false); }} style={{ padding: '8px 12px', borderBottom: '1px solid #F8FAFC', cursor: 'pointer', transition: 'background 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div key={emp.id} onClick={() => handleWorkerSelect(emp)} style={{ padding: '8px 12px', borderBottom: '1px solid #F8FAFC', cursor: 'pointer', transition: 'background 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                 <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>{emp.name}</span>
                                                 <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>${emp.hourly_rate}/hr</span>
                                             </div>
@@ -368,6 +390,18 @@ export const ControlMatrixPage: React.FC = () => {
                                     </div>
                                 )}
                             </div>
+
+                            <div style={{ width: '100px', display: 'flex', alignItems: 'center', gap: '4px', background: '#F8FAFC', padding: '0 8px', borderRadius: '8px', height: '38px', border: '1px solid #E2E8F0' }}>
+                                <span style={{ fontSize: '0.8rem', color: '#94A3B8' }}>$</span>
+                                <input
+                                    type="number"
+                                    value={manualRate}
+                                    onChange={(e) => setManualRate(parseFloat(e.target.value) || 0)}
+                                    style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontWeight: 600, fontSize: '0.9rem', color: '#0F172A' }}
+                                />
+                                <span style={{ fontSize: '0.8rem', color: '#94A3B8' }}>/hr</span>
+                            </div>
+
                             <button className="btn btn-primary" onClick={assignSingleWorker} disabled={isSaving} style={{ height: '38px', borderRadius: '8px', fontWeight: 600, padding: '0 1.25rem', fontSize: '0.9rem' }}>
                                 Assign
                             </button>
@@ -381,7 +415,6 @@ export const ControlMatrixPage: React.FC = () => {
 
                             return (
                                 <div key={task.id} className="worker-card" style={{ background: 'white', borderRadius: '16px', padding: '1.25rem', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                                    {/* Top Row: Info */}
                                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                             <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '1rem' }}>
@@ -397,7 +430,6 @@ export const ControlMatrixPage: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    {/* Bottom Row: Controls */}
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <div className="timer-display" style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0F172A', fontFamily: 'monospace', letterSpacing: '-0.02em' }}>
                                             {formatCurrentTime(task)}
@@ -429,19 +461,16 @@ export const ControlMatrixPage: React.FC = () => {
                                                     <i className="fa-solid fa-play"></i>
                                                 </button>
                                             )}
-
                                             {(status === 'clocked_in' || status === 'active' || status === 'break') && (
                                                 <button title="Clock Out" onClick={() => performTaskAction(task.id, 'clock_out')} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: '#F1F5F9', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s' }}>
                                                     <i className="fa-solid fa-arrow-right-from-bracket"></i>
                                                 </button>
                                             )}
-
                                             {status !== 'pending' && status !== 'completed' && (
                                                 <button title="Complete" onClick={() => performTaskAction(task.id, 'complete')} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: '#FEE2E2', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s' }}>
                                                     <i className="fa-solid fa-check"></i>
                                                 </button>
                                             )}
-
                                             <button title="Remove" onClick={() => deleteTask(task.id)} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: 'transparent', color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s', marginLeft: '0.25rem' }}>
                                                 <i className="fa-regular fa-trash-can"></i>
                                             </button>
@@ -483,17 +512,35 @@ export const ControlMatrixPage: React.FC = () => {
                         <label style={{ display: 'block', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.5rem', color: '#0F172A' }}>
                             Reason (Required)
                         </label>
-                        <input
-                            type="text"
-                            placeholder="e.g. Lunch Break, Meeting, Material Delay"
-                            value={pauseReason}
-                            onChange={(e) => { setPauseReason(e.target.value); setPauseError(''); }}
+                        <select
+                            value={pauseReasonType}
+                            onChange={(e) => { setPauseReasonType(e.target.value); setPauseError(''); }}
                             style={{
                                 width: '100%', padding: '0.75rem', borderRadius: '8px',
-                                border: pauseError ? '1.5px solid #EF4444' : '1.5px solid #CBD5E1',
-                                fontSize: '0.95rem', outline: 'none'
+                                border: '1.5px solid #CBD5E1', background: 'white',
+                                fontSize: '0.95rem', outline: 'none', marginBottom: pauseReasonType === 'Other' ? '0.75rem' : '0'
                             }}
-                        />
+                        >
+                            <option value="Lunch">Lunch</option>
+                            <option value="Restroom">Restroom</option>
+                            <option value="Emergency call">Emergency call</option>
+                            <option value="Power Nap">Power Nap</option>
+                            <option value="Other">Other</option>
+                        </select>
+
+                        {pauseReasonType === 'Other' && (
+                            <input
+                                type="text"
+                                placeholder="Please specify reason..."
+                                value={pauseReason}
+                                onChange={(e) => { setPauseReason(e.target.value); setPauseError(''); }}
+                                style={{
+                                    width: '100%', padding: '0.75rem', borderRadius: '8px',
+                                    border: pauseError ? '1.5px solid #EF4444' : '1.5px solid #CBD5E1',
+                                    fontSize: '0.95rem', outline: 'none'
+                                }}
+                            />
+                        )}
                         {pauseError && <div style={{ color: '#EF4444', fontSize: '0.8rem', marginTop: '0.25rem', fontWeight: 500 }}>{pauseError}</div>}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
