@@ -194,7 +194,6 @@ export const ControlTablePage: React.FC = () => {
             worker_id: '',
             mo_reference: '',
             description: '',
-            description: '',
             // Use local time for default
             start_time: (() => {
                 const now = new Date();
