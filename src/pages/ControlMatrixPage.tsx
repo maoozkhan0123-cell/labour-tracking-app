@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
+import { performTaskAction } from '../lib/taskService';
+import type { Task, User } from '../types';
 
 export const ControlMatrixPage: React.FC = () => {
     const [mos, setMos] = useState<any[]>([]);
     const [operations, setOperations] = useState<string[]>([]);
-    const [employees, setEmployees] = useState<any[]>([]);
-    const [tasks, setTasks] = useState<any[]>([]);
+    const [employees, setEmployees] = useState<User[]>([]);
+    const [tasks, setTasks] = useState<Task[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     const [isAssignOpen, setIsAssignOpen] = useState(false);
@@ -14,24 +16,24 @@ export const ControlMatrixPage: React.FC = () => {
     const [selectedWorkerId, setSelectedWorkerId] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [showWorkerDropdown, setShowWorkerDropdown] = useState(false);
-    const [manualRate, setManualRate] = useState<number>(0);
+    const [manualRate, setManualRate] = useState<number | string>(0);
 
     // Pause Reason Modal State
     const [isPauseModalOpen, setIsPauseModalOpen] = useState(false);
     const [pauseTaskId, setPauseTaskId] = useState<string | null>(null);
     const [pauseReason, setPauseReason] = useState('');
-    const [pauseReasonType, setPauseReasonType] = useState('Lunch'); // Default selection
-    const [pauseError, setPauseError] = useState('');
+    // const [pauseError, setPauseError] = useState('');
 
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Initial load
         fetchData(true);
         const interval = setInterval(() => {
             setTasks(prev => [...prev]); // Trigger re-render for timers
-        }, 1000);
-        return () => clearInterval(interval);
+        }, 1000); // 1s interval for UI timers
+        // Also refetch data periodically to sync with other clients
+        const dataInterval = setInterval(() => fetchData(false), 5000);
+        return () => { clearInterval(interval); clearInterval(dataInterval); };
     }, []);
 
     useEffect(() => {
@@ -61,8 +63,8 @@ export const ControlMatrixPage: React.FC = () => {
                 setMos(sortedMos);
             }
             if (opData) setOperations(opData.map((o: any) => o.name));
-            if (empData) setEmployees(empData);
-            if (taskData) setTasks(taskData);
+            if (empData) setEmployees(empData as User[]);
+            if (taskData) setTasks(taskData as Task[]);
         } catch (err) {
             console.error('Error fetching matrix data:', err);
         } finally {
@@ -77,48 +79,72 @@ export const ControlMatrixPage: React.FC = () => {
     const handleCellClick = (moNumber: string, opName: string, productName: string) => {
         setSelectedCell({ mo: moNumber, op: opName, product: productName || 'Unnamed Product' });
         setIsAssignOpen(true);
+        // Reset local state
+        setManualRate(''); // Reset to empty
+        setSelectedWorkerId('');
+        setShowWorkerDropdown(false);
     };
 
     const closeAssign = () => {
         setIsAssignOpen(false);
         setSelectedCell(null);
-        setSelectedWorkerId('');
-        setShowWorkerDropdown(false);
     };
 
-    const handleWorkerSelect = (emp: any) => {
+    const handleWorkerSelect = (emp: User) => {
         setSelectedWorkerId(emp.id);
-        setManualRate(emp.hourly_rate || 0);
+        const rate = emp.hourly_rate || 0;
+        setManualRate(String(rate)); // Set initial rate as string
         setShowWorkerDropdown(false);
     };
 
     const assignSingleWorker = async () => {
         if (!selectedCell || !selectedWorkerId) return;
+
         setIsSaving(true);
         try {
-            const { error } = await (supabase.from('tasks') as any).insert({
+            // Unused 'worker' removed
+            const rate = parseFloat(String(manualRate)) || 0; // Ensure parsing
+
+            // Check if active task exists for this worker in this cell
+            const existing = tasks.find(t =>
+                t.mo_reference === selectedCell.mo &&
+                t.description === selectedCell.op &&
+                t.assigned_to_id === selectedWorkerId &&
+                t.status !== 'completed'
+            );
+
+            if (existing) {
+                alert('Worker is already assigned to this operation!');
+                setIsSaving(false);
+                return;
+            }
+
+            const newTask = {
+                assigned_to_id: selectedWorkerId,
                 mo_reference: selectedCell.mo,
                 description: selectedCell.op,
-                assigned_to_id: selectedWorkerId,
-                status: 'pending',
-                hourly_rate: manualRate,
+                status: 'pending', // Waiting to start
                 active_seconds: 0,
-                break_seconds: 0,
-                total_duration_seconds: 0,
-                manual: false
-            });
+                hourly_rate: rate,
+                start_time: null
+            };
+
+            // Using 'any' cast to bypass strict typing issues with Supabase generated types if they are out of sync
+            const { error } = await (supabase.from('tasks') as any).insert(newTask);
             if (error) throw error;
-            await fetchData(false);
-            setSelectedWorkerId('');
-            setManualRate(0);
-        } catch (err) {
-            console.error('Error assigning worker:', err);
+
+            fetchData();
+        } catch (e: any) {
+            alert('Error assigning worker: ' + e.message);
         } finally {
             setIsSaving(false);
+            // Don't close modal to allow assigning more
+            setSelectedWorkerId('');
+            setManualRate('');
         }
     };
 
-    const deleteTask = async (taskId: string) => {
+    /* const deleteTask = async (taskId: string) => {
         if (!confirm('Remove this assignment?')) return;
         try {
             const { error } = await supabase.from('tasks').delete().eq('id', taskId);
@@ -127,94 +153,40 @@ export const ControlMatrixPage: React.FC = () => {
         } catch (err) {
             console.error('Error deleting task:', err);
         }
+    }; */
+
+    const handleTaskAction = async (task: Task, action: 'start' | 'pause' | 'resume' | 'complete', reason?: string) => {
+        // Check if worker is on break
+        const worker = employees.find(e => e.id === task.assigned_to_id);
+        if (worker && worker.availability === 'break' && (action === 'start' || action === 'resume')) {
+            alert(`Cannot ${action} task. ${worker.name} is currently on break.`);
+            return;
+        }
+
+        // Use the centralized service
+        await performTaskAction(task, action, reason);
+        await fetchData(false);
     };
 
     const openPauseModal = (taskId: string) => {
         setPauseTaskId(taskId);
-        const currentTask = tasks.find(t => t.id === taskId);
-        setPauseReasonType('Lunch'); // Reset to default
-        setPauseReason(currentTask?.reason || '');
-        setPauseError('');
+        setPauseReason(''); // Reset reason
+        // setPauseError('');
         setIsPauseModalOpen(true);
     };
 
-    const confirmPause = async () => {
+    const confirmPauseManual = async () => {
         if (!pauseTaskId) return;
+        const task = tasks.find(t => t.id === pauseTaskId);
+        if (!task) return;
 
-        // Determine final reason
-        let finalReason = pauseReasonType;
-        if (pauseReasonType === 'Other') {
-            finalReason = pauseReason.trim(); // Use custom input
-            if (!finalReason) {
-                setPauseError('Please specify a reason');
-                return;
-            }
-        }
-
-        await performTaskAction(pauseTaskId, 'pause', finalReason);
+        // Manual pause via modal
+        await handleTaskAction(task, 'pause', pauseReason || 'Manual Pause');
         setIsPauseModalOpen(false);
         setPauseTaskId(null);
     };
 
-    const performTaskAction = async (taskId: string, action: string, reason?: string) => {
-        try {
-            const task = tasks.find(t => t.id === taskId);
-            if (!task) return;
-
-            let updates: any = {};
-            const now = new Date().toISOString();
-
-            if (action === 'clock_in') {
-                updates = { status: 'clocked_in', last_action_time: now };
-            } else if (action === 'start') {
-                updates = { status: 'active', start_time: task.start_time || now, last_action_time: now };
-            } else if (action === 'stop') {
-                // Regular stop (clocked in)
-                const diff = task.last_action_time ? Math.floor((new Date().getTime() - new Date(task.last_action_time).getTime()) / 1000) : 0;
-                updates = {
-                    status: 'clocked_in',
-                    active_seconds: (task.active_seconds || 0) + (diff > 0 ? diff : 0),
-                    last_action_time: now
-                };
-            } else if (action === 'pause') {
-                // Taking a break - Reason is now passed in
-                const diff = task.last_action_time ? Math.floor((new Date().getTime() - new Date(task.last_action_time).getTime()) / 1000) : 0;
-                updates = {
-                    status: 'break',
-                    active_seconds: (task.active_seconds || 0) + (diff > 0 ? diff : 0),
-                    last_action_time: now,
-                    reason: reason // Save reason to tasks table
-                };
-            } else if (action === 'resume') {
-                updates = { status: 'active', last_action_time: now };
-            } else if (action === 'complete') {
-                const diff = (task.status === 'active' && task.last_action_time) ? Math.floor((new Date().getTime() - new Date(task.last_action_time).getTime()) / 1000) : 0;
-                updates = {
-                    status: 'completed',
-                    active_seconds: (task.active_seconds || 0) + (diff > 0 ? diff : 0),
-                    end_time: now,
-                    last_action_time: now
-                };
-            } else if (action === 'clock_out') {
-                // Clock out logic
-                const diff = (task.status === 'active' && task.last_action_time) ? Math.floor((new Date().getTime() - new Date(task.last_action_time).getTime()) / 1000) : 0;
-                updates = {
-                    status: 'clocked_out',
-                    active_seconds: (task.active_seconds || 0) + (diff > 0 ? diff : 0),
-                    end_time: now, // Update end_time on clock_out
-                    last_action_time: now
-                };
-            }
-
-            const { error } = await (supabase.from('tasks') as any).update(updates).eq('id', taskId);
-            if (error) throw error;
-            await fetchData(false); // Don't show loading screen
-        } catch (err) {
-            console.error('Error performing action:', err);
-        }
-    };
-
-    const formatCurrentTime = (task: any) => {
+    const formatCurrentTime = (task: Task) => {
         let total = task.active_seconds || 0;
         if (task.status === 'active' && task.last_action_time) {
             const diff = Math.floor((new Date().getTime() - new Date(task.last_action_time).getTime()) / 1000);
@@ -229,11 +201,12 @@ export const ControlMatrixPage: React.FC = () => {
     const getStatusIndicator = (status: string) => {
         const s = (status || 'pending').toLowerCase();
         let color = '#94A3B8'; // gray
-        let label = s.toUpperCase().replace('_', ' ');
-        if (s === 'active') color = '#22C55E';
-        if (s === 'break') color = '#F59E0B';
-        if (s === 'clocked_in') color = '#3B82F6';
-        if (s === 'completed') color = '#10B981';
+        let label = s.toUpperCase();
+
+        if (s === 'active') { color = '#22C55E'; label = 'ACTIVE'; }
+        if (s === 'break') { color = '#F59E0B'; label = 'ON BREAK'; } // Auto-paused
+        if (s === 'paused') { color = '#F59E0B'; label = 'PAUSED'; }
+        if (s === 'completed') { color = '#10B981'; label = 'DONE'; }
 
         return (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: `${color}15`, padding: '4px 8px', borderRadius: '6px' }}>
@@ -247,6 +220,9 @@ export const ControlMatrixPage: React.FC = () => {
 
     const selectedWorker = employees.find(e => e.id === selectedWorkerId);
 
+    // Filter for Dropdown: Only Present Employees
+    const presentEmployees = employees.filter(e => e.status === 'present');
+
     return (
         <>
             <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
@@ -254,9 +230,6 @@ export const ControlMatrixPage: React.FC = () => {
                     <h1 className="page-title">Production Control Matrix</h1>
                     <p className="page-subtitle">Click any cell to assign workers and control timers</p>
                 </div>
-                <button className="btn btn-secondary" style={{ width: 'auto', padding: '0.6rem 1.5rem' }}>
-                    <i className="fa-solid fa-plus"></i> Manual Entry
-                </button>
             </div>
 
             <div className="matrix-container">
@@ -278,15 +251,27 @@ export const ControlMatrixPage: React.FC = () => {
                         <div key={mo.id} className="matrix-row" id={`mo-${mo.mo_number}`}>
                             <div className="matrix-label-cell" style={{ width: '200px' }}>
                                 <Link to="/manufacturing-orders" className="mo-badge" style={{ textDecoration: 'none' }}>{mo.mo_number}</Link>
-                                <div className="mo-details" style={{ fontSize: '0.9rem', fontWeight: 800, color: '#000000', marginTop: '4px' }}>{mo.product_name}</div>
-
+                                <div
+                                    className="mo-details"
+                                    title={mo.product_name}
+                                    style={{
+                                        fontSize: '0.9rem',
+                                        fontWeight: 800,
+                                        color: '#000000',
+                                        marginTop: '4px',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: '180px', // Explicit max-width slightly less than parent
+                                        display: 'block'
+                                    }}>
+                                    {mo.product_name}
+                                </div>
                                 <div style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                    <div><span style={{ fontWeight: 600 }}>PO:</span> {mo.po_number || '-'}</div>
+                                    {mo.origin && <div><span style={{ fontWeight: 600 }}>PO:</span> {mo.origin}</div>}
+                                    {mo.product_default_code && <div><span style={{ fontWeight: 600 }}>SKU:</span> {mo.product_default_code}</div>}
                                     <div><span style={{ fontWeight: 600 }}>Qty:</span> {mo.quantity || 0}</div>
-                                    <div><span style={{ fontWeight: 600 }}>SKU:</span> {mo.sku || '-'}</div>
-                                    <div style={{ marginTop: '4px' }}>
-                                        <span className={`status-badge badge-${(mo.current_status || 'draft').toLowerCase()}`}>{mo.current_status}</span>
-                                    </div>
+                                    <div><span className={`status-badge badge-${(mo.current_status || 'draft').toLowerCase()}`}>{mo.current_status}</span></div>
                                 </div>
                             </div>
 
@@ -301,30 +286,22 @@ export const ControlMatrixPage: React.FC = () => {
                                     >
                                         {cellTasks.length > 0 ? (
                                             <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
-                                                <div>
-                                                    <div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: '4px' }}>
-                                                        <i className="fa-solid fa-user-group" style={{ color: 'var(--text-muted)', marginRight: '4px' }}></i>
-                                                        {cellTasks.length} workers
-                                                    </div>
+                                                <div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: '4px' }}>
+                                                    {cellTasks.length} workers
                                                 </div>
                                                 <div style={{ display: 'flex', alignItems: 'center', marginTop: '8px' }}>
                                                     {cellTasks.slice(0, 3).map(t => {
                                                         const worker = employees.find(e => e.id === t.assigned_to_id);
                                                         return (
-                                                            <Link key={t.id} to="/employee-activity" className="worker-avatar" title={worker?.name} style={{ textDecoration: 'none' }}>
+                                                            <div key={t.id} className="worker-avatar" title={worker?.name}>
                                                                 {worker?.name?.[0] || '?'}
-                                                            </Link>
+                                                            </div>
                                                         );
                                                     })}
-                                                    {cellTasks.length > 3 && (
-                                                        <span className="worker-avatar" style={{ background: '#CBD5E1', color: 'var(--text-muted)' }}>
-                                                            +{cellTasks.length - 3}
-                                                        </span>
-                                                    )}
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="matrix-cell-empty">Click to assign</div>
+                                            <div className="matrix-cell-empty">Assign</div>
                                         )}
                                     </div>
                                 );
@@ -335,229 +312,216 @@ export const ControlMatrixPage: React.FC = () => {
             </div>
 
             {/* Assignments Modal */}
-            <div
-                className={`assign-modal ${isAssignOpen ? 'active' : ''}`}
-                style={{
-                    width: '640px', maxHeight: '85vh', position: 'fixed', left: '50%', top: '50%',
-                    transform: `translate(-50%, -50%) scale(${isAssignOpen ? 1 : 0.9})`,
-                    opacity: isAssignOpen ? 1 : 0,
-                    pointerEvents: isAssignOpen ? 'auto' : 'none',
-                    background: '#ffffff', borderRadius: '20px',
-                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                    zIndex: 2600, transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-                    display: 'flex', flexDirection: 'column', overflow: 'hidden'
-                }}
-            >
-                <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #F1F5F9', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className={`assign-modal ${isAssignOpen ? 'active' : ''}`} style={{
+                width: '640px', maxHeight: '85vh', position: 'fixed', left: '50%', top: '50%',
+                transform: `translate(-50%, -50%) scale(${isAssignOpen ? 1 : 0.9})`,
+                opacity: isAssignOpen ? 1 : 0, pointerEvents: isAssignOpen ? 'auto' : 'none',
+                background: '#ffffff', borderRadius: '20px', zIndex: 2600,
+                display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)'
+            }}>
+                <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
-                        <h2 style={{ fontSize: '1.1rem', color: '#0F172A', fontWeight: 700, marginBottom: '0.2rem' }}>
-                            {selectedCell?.product}
-                        </h2>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span className="badge badge-blue" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>{selectedCell?.mo}</span>
-                            <i className="fa-solid fa-chevron-right" style={{ color: '#CBD5E1', fontSize: '0.7rem' }}></i>
-                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>{selectedCell?.op}</span>
+                        <h2 style={{ fontSize: '1.1rem', color: '#0F172A', fontWeight: 700 }}>{selectedCell?.product}</h2>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem' }}>
+                            <span className="badge badge-blue">{selectedCell?.mo}</span>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>/ {selectedCell?.op}</span>
                         </div>
                     </div>
-                    <button className="close-btn" onClick={closeAssign} style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#64748B', cursor: 'pointer' }}>
-                        <i className="fa-solid fa-xmark"></i>
-                    </button>
+                    <button className="close-btn" onClick={closeAssign}><i className="fa-solid fa-xmark"></i></button>
                 </div>
 
-                <div className="offcanvas-body" style={{ padding: '1.5rem', background: '#F8FAFC', flex: 1, overflowY: 'auto' }}>
+                <div className="offcanvas-body" style={{ padding: '1.5rem', background: '#F8FAFC', flex: 1, overflowY: 'auto', minHeight: '400px' }}>
                     <div style={{ marginBottom: '2rem' }}>
-                        <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748B', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Add Worker</h3>
-                        <div style={{ background: 'white', padding: '0.4rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '0.5rem', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                            <div style={{ flex: 1, position: 'relative' }} ref={dropdownRef}>
+                        <h3 style={{ fontSize: '0.85rem', fontWeight: 600, color: '#64748B', marginBottom: '0.75rem', textTransform: 'uppercase' }}>Add Worker</h3>
+                        <div style={{ background: 'white', padding: '0.4rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ flex: 1, position: 'relative', minWidth: 0 }} ref={dropdownRef}>
                                 <div
                                     onClick={() => setShowWorkerDropdown(!showWorkerDropdown)}
-                                    style={{ height: '38px', padding: '0 0.75rem', borderRadius: '8px', background: selectedWorkerId ? '#F1F5F9' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', transition: 'all 0.2s' }}
+                                    style={{ height: '48px', padding: '0 0.75rem', borderRadius: '8px', background: selectedWorkerId ? '#F1F5F9' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
                                 >
-                                    <span style={{ fontSize: '0.9rem', color: selectedWorkerId ? '#0F172A' : '#94A3B8', fontWeight: selectedWorkerId ? 600 : 500 }}>
-                                        {selectedWorker ? selectedWorker.name : 'Select a worker...'}
-                                    </span>
-                                    <i className="fa-solid fa-chevron-down" style={{ color: '#94A3B8', fontSize: '0.75rem' }}></i>
+                                    <span style={{ fontSize: '0.9rem', color: selectedWorkerId ? '#0F172A' : '#94A3B8', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedWorker ? selectedWorker.name : 'Select worker...'}</span>
+                                    <i className="fa-solid fa-chevron-down" style={{ color: '#94A3B8', fontSize: '0.75rem', marginLeft: '8px' }}></i>
                                 </div>
 
                                 {showWorkerDropdown && (
-                                    <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, width: '100%', background: 'white', borderRadius: '10px', boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0,0,0,0.04)', zIndex: 50, overflow: 'hidden', maxHeight: '200px', overflowY: 'auto' }}>
-                                        {employees.map(emp => (
-                                            <div key={emp.id} onClick={() => handleWorkerSelect(emp)} style={{ padding: '8px 12px', borderBottom: '1px solid #F8FAFC', cursor: 'pointer', transition: 'background 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>{emp.name}</span>
-                                                <span style={{ fontSize: '0.75rem', color: '#94A3B8' }}>${emp.hourly_rate}/hr</span>
+                                    <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, width: '100%', minWidth: '250px', background: 'white', borderRadius: '10px', boxShadow: '0 10px 30px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0,0,0,0.04)', zIndex: 1000, maxHeight: '200px', overflowY: 'auto' }}>
+                                        {presentEmployees.length > 0 ? presentEmployees.map(emp => (
+                                            <div key={emp.id} onClick={() => handleWorkerSelect(emp)} style={{ padding: '10px 14px', borderBottom: '1px solid #F8FAFC', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={(e) => e.currentTarget.style.background = 'white'}>
+                                                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1E293B' }}>{emp.name}</span>
+                                                <span style={{ fontSize: '0.8rem', color: '#64748B', background: '#F1F5F9', padding: '2px 6px', borderRadius: '4px' }}>${emp.hourly_rate}/hr</span>
                                             </div>
-                                        ))}
+                                        )) : (
+                                            <div style={{ padding: '12px', color: '#94A3B8', fontSize: '0.85rem', textAlign: 'center' }}>No workers clocked in</div>
+                                        )}
                                     </div>
                                 )}
                             </div>
-
-                            <div style={{ width: '100px', display: 'flex', alignItems: 'center', gap: '4px', background: '#F8FAFC', padding: '0 8px', borderRadius: '8px', height: '38px', border: '1px solid #E2E8F0' }}>
-                                <span style={{ fontSize: '0.8rem', color: '#94A3B8' }}>$</span>
-                                <input
-                                    type="number"
-                                    value={manualRate}
-                                    onChange={(e) => setManualRate(parseFloat(e.target.value) || 0)}
-                                    style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontWeight: 600, fontSize: '0.9rem', color: '#0F172A' }}
-                                />
-                                <span style={{ fontSize: '0.8rem', color: '#94A3B8' }}>/hr</span>
-                            </div>
-
-                            <button className="btn btn-primary" onClick={assignSingleWorker} disabled={isSaving} style={{ height: '38px', borderRadius: '8px', fontWeight: 600, padding: '0 1.25rem', fontSize: '0.9rem' }}>
-                                Assign
-                            </button>
+                            <input
+                                type="number"
+                                value={manualRate}
+                                onChange={(e) => setManualRate(e.target.value)}
+                                style={{ width: '120px', height: '48px', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '0 8px', fontSize: '0.95rem' }}
+                            />
+                            <button className="btn btn-primary" onClick={assignSingleWorker} disabled={isSaving || !selectedWorkerId} style={{ height: '48px', padding: '0 1.5rem' }}>Assign</button>
                         </div>
                     </div>
 
-                    <div id="assignedList" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         {selectedCell && getTasksForCell(selectedCell.mo, selectedCell.op).map(task => {
                             const worker = employees.find(e => e.id === task.assigned_to_id);
-                            const status = (task.status || 'pending').toLowerCase();
-
                             return (
-                                <div key={task.id} className="worker-card" style={{ background: 'white', borderRadius: '16px', padding: '1.25rem', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '1rem' }}>
-                                                {worker?.name?.[0] || '?'}
-                                            </div>
-                                            <div>
-                                                <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '1rem', marginBottom: '2px' }}>{worker?.name}</div>
-                                                <div style={{ fontSize: '0.8rem', color: '#64748B' }}>${task.hourly_rate}/hr</div>
-                                            </div>
+                                <div key={task.id} className="worker-card" style={{
+                                    background: 'white',
+                                    borderRadius: '16px',
+                                    padding: '1rem 1.25rem',
+                                    border: '1px solid #E2E8F0',
+                                    position: 'relative',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    height: '80px' // Fixed height for consistency
+                                }}>
+                                    {/* Left: Avatar & Info */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', zIndex: 2 }}>
+                                        <div style={{
+                                            width: '42px',
+                                            height: '42px',
+                                            borderRadius: '50%',
+                                            background: 'var(--primary)',
+                                            color: 'white',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontWeight: 700,
+                                            flexShrink: 0 // Prevent oval shape
+                                        }}>
+                                            {worker?.name?.[0] || '?'}
                                         </div>
                                         <div>
-                                            {getStatusIndicator(task.status)}
+                                            <div style={{ fontWeight: 700, lineHeight: 1.2 }}>{worker?.name}</div>
+                                            <div style={{ fontSize: '0.8rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span>${task.hourly_rate}/hr</span>
+                                                {getStatusIndicator(task.status)}
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <div className="timer-display" style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0F172A', fontFamily: 'monospace', letterSpacing: '-0.02em' }}>
-                                            {formatCurrentTime(task)}
-                                        </div>
+                                    {/* Center: Timer (Absolute) */}
+                                    <div data-testid="timer-display" className="timer-display" style={{
+                                        position: 'absolute',
+                                        left: '50%',
+                                        top: '50%',
+                                        transform: 'translate(-50%, -50%)',
+                                        fontSize: '1.5rem',
+                                        fontWeight: 700,
+                                        fontFamily: 'monospace',
+                                        color: '#1E293B',
+                                        whiteSpace: 'nowrap',
+                                        zIndex: 1,
+                                        background: '#F8FAFC',
+                                        padding: '4px 12px',
+                                        borderRadius: '8px'
+                                    }}>
+                                        {formatCurrentTime(task)}
+                                    </div>
 
-                                        <div className="action-toolbar" style={{ display: 'flex', gap: '0.5rem' }}>
-                                            {(status === 'pending' || status === 'clocked_out') && (
-                                                <button title="Clock In" onClick={() => performTaskAction(task.id, 'clock_in')} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: '#EEF2FF', color: '#4F46E5', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s' }}>
-                                                    <i className="fa-solid fa-arrow-right-to-bracket"></i>
+                                    {/* Right: Buttons (Absolute) */}
+                                    <div className="action-toolbar" style={{
+                                        position: 'absolute',
+                                        right: '1.25rem',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        display: 'flex',
+                                        gap: '0.75rem',
+                                        zIndex: 2
+                                    }}>
+                                        {/* Logic: If pending or paused or resume from break -> Start/Resume (Play) */}
+                                        {/* If active -> Pause or Complete */}
+
+                                        {(task.status === 'pending' || task.status === 'paused' || task.status === 'break') && (
+                                            <button title="Start / Resume" onClick={() => handleTaskAction(task, task.status === 'pending' ? 'start' : 'resume')} style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#DCFCE7', color: '#16A34A', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                                                <i className="fa-solid fa-play"></i>
+                                            </button>
+                                        )}
+
+                                        {task.status === 'active' && (
+                                            <>
+                                                <button title="Pause" onClick={() => openPauseModal(task.id)} style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#FEF3C7', color: '#F59E0B', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                                                    <i className="fa-solid fa-pause"></i>
                                                 </button>
-                                            )}
-                                            {status === 'clocked_in' && (
-                                                <button title="Start Timer" onClick={() => performTaskAction(task.id, 'start')} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: '#DCFCE7', color: '#16A34A', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s' }}>
-                                                    <i className="fa-solid fa-play"></i>
-                                                </button>
-                                            )}
-                                            {status === 'active' && (
-                                                <>
-                                                    <button title="Stop Timer" onClick={() => performTaskAction(task.id, 'stop')} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: '#FEF9C3', color: '#D97706', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s' }}>
-                                                        <i className="fa-solid fa-stop"></i>
-                                                    </button>
-                                                    <button title="Pause" onClick={() => openPauseModal(task.id)} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: '#FEF3C7', color: '#F59E0B', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s' }}>
-                                                        <i className="fa-solid fa-pause"></i>
-                                                    </button>
-                                                </>
-                                            )}
-                                            {status === 'break' && (
-                                                <button title="Resume" onClick={() => performTaskAction(task.id, 'resume')} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: '#DCFCE7', color: '#16A34A', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s' }}>
-                                                    <i className="fa-solid fa-play"></i>
-                                                </button>
-                                            )}
-                                            {(status === 'clocked_in' || status === 'active' || status === 'break') && (
-                                                <button title="Clock Out" onClick={() => performTaskAction(task.id, 'clock_out')} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: '#F1F5F9', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s' }}>
-                                                    <i className="fa-solid fa-arrow-right-from-bracket"></i>
-                                                </button>
-                                            )}
-                                            {status !== 'pending' && status !== 'completed' && (
-                                                <button title="Complete" onClick={() => performTaskAction(task.id, 'complete')} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: '#FEE2E2', color: '#DC2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s' }}>
+                                                <button title="Complete" onClick={() => handleTaskAction(task, 'complete')} style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#FEE2E2', color: '#DC2626', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
                                                     <i className="fa-solid fa-check"></i>
                                                 </button>
-                                            )}
-                                            <button title="Remove" onClick={() => deleteTask(task.id)} style={{ width: '40px', height: '40px', borderRadius: '50%', border: 'none', background: 'transparent', color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'all 0.2s', marginLeft: '0.25rem' }}>
-                                                <i className="fa-regular fa-trash-can"></i>
-                                            </button>
-                                        </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             );
                         })}
-
-                        {selectedCell && getTasksForCell(selectedCell.mo, selectedCell.op).length === 0 && (
-                            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#94A3B8' }}>
-                                <i className="fa-solid fa-clipboard-user" style={{ fontSize: '2rem', marginBottom: '1rem', color: '#CBD5E1' }}></i>
-                                <p>No workers assigned yet.</p>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Pause Reason Modal */}
-            <div className={`offcanvas ${isPauseModalOpen ? 'show' : ''}`} style={{
-                right: 'auto', left: '50%', top: '50%', transform: `translate(-50%, -50%)`,
-                width: '400px', height: 'auto', borderRadius: '16px',
-                opacity: isPauseModalOpen ? 1 : 0, pointerEvents: isPauseModalOpen ? 'all' : 'none',
-                transition: 'opacity 0.2s', zIndex: 3100, background: 'white', position: 'fixed',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            {/* Manual Pause Modal */}
+            <div className={`modal-backdrop ${isPauseModalOpen ? 'active' : ''}`} style={{
+                position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                background: 'rgba(0,0,0,0.5)', zIndex: 3000,
+                display: isPauseModalOpen ? 'flex' : 'none',
+                alignItems: 'center', justifyContent: 'center'
             }}>
-                <div style={{ padding: '1.5rem 1.5rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Pause Reason</h3>
-                    <button className="close-btn" onClick={() => setIsPauseModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#64748B' }}>
-                        <i className="fa-solid fa-xmark"></i>
-                    </button>
-                </div>
-                <div style={{ padding: '0 1.5rem 1.5rem' }}>
-                    <p style={{ color: '#64748B', fontSize: '0.9rem', marginBottom: '1rem', lineHeight: 1.5 }}>
-                        Please specify why this worker is taking a break.
-                    </p>
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{ display: 'block', fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.5rem', color: '#0F172A' }}>
-                            Reason (Required)
-                        </label>
-                        <select
-                            value={pauseReasonType}
-                            onChange={(e) => { setPauseReasonType(e.target.value); setPauseError(''); }}
-                            style={{
-                                width: '100%', padding: '0.75rem', borderRadius: '8px',
-                                border: '1.5px solid #CBD5E1', background: 'white',
-                                fontSize: '0.95rem', outline: 'none', marginBottom: pauseReasonType === 'Other' ? '0.75rem' : '0'
-                            }}
-                        >
-                            <option value="Lunch">Lunch</option>
-                            <option value="Restroom">Restroom</option>
-                            <option value="Emergency call">Emergency call</option>
-                            <option value="Power Nap">Power Nap</option>
-                            <option value="Other">Other</option>
-                        </select>
+                <div style={{
+                    background: 'white',
+                    width: '400px',
+                    borderRadius: '16px',
+                    padding: '1.5rem',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                    position: 'relative',
+                    zIndex: 3001
+                }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.5rem', color: '#0F172A' }}>Pause Task</h3>
+                    <p style={{ color: '#64748B', fontSize: '0.9rem', marginBottom: '1.25rem', lineHeight: '1.4' }}>Enter a reason for pausing this task (optional).</p>
 
-                        {pauseReasonType === 'Other' && (
-                            <input
-                                type="text"
-                                placeholder="Please specify reason..."
-                                value={pauseReason}
-                                onChange={(e) => { setPauseReason(e.target.value); setPauseError(''); }}
-                                style={{
-                                    width: '100%', padding: '0.75rem', borderRadius: '8px',
-                                    border: pauseError ? '1.5px solid #EF4444' : '1.5px solid #CBD5E1',
-                                    fontSize: '0.95rem', outline: 'none'
-                                }}
-                            />
-                        )}
-                        {pauseError && <div style={{ color: '#EF4444', fontSize: '0.8rem', marginTop: '0.25rem', fontWeight: 500 }}>{pauseError}</div>}
-                    </div>
+                    <textarea
+                        value={pauseReason}
+                        onChange={(e) => setPauseReason(e.target.value)}
+                        placeholder="e.g. Machine Maintenance"
+                        style={{
+                            width: '100%',
+                            padding: '0.75rem',
+                            borderRadius: '8px',
+                            border: '1px solid #CBD5E1',
+                            marginBottom: '1.5rem',
+                            minHeight: '100px',
+                            fontFamily: 'inherit',
+                            fontSize: '0.9rem',
+                            resize: 'vertical'
+                        }}
+                    />
+
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                         <button
                             onClick={() => setIsPauseModalOpen(false)}
                             style={{
-                                padding: '0.75rem', borderRadius: '8px', border: '1.5px solid #E2E8F0',
-                                background: 'white', color: '#0F172A', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem'
+                                padding: '0.75rem',
+                                borderRadius: '8px',
+                                border: '1px solid #E2E8F0',
+                                background: 'white',
+                                color: '#475569',
+                                fontWeight: 600,
+                                cursor: 'pointer'
                             }}
                         >
                             Cancel
                         </button>
                         <button
-                            onClick={confirmPause}
+                            onClick={confirmPauseManual}
                             style={{
-                                padding: '0.75rem', borderRadius: '8px', border: 'none',
-                                background: '#0F172A', color: 'white', fontWeight: 600, cursor: 'pointer', fontSize: '0.95rem'
+                                padding: '0.75rem',
+                                borderRadius: '8px',
+                                border: 'none',
+                                background: '#0F172A',
+                                color: 'white',
+                                fontWeight: 600,
+                                cursor: 'pointer'
                             }}
                         >
                             Confirm Pause
@@ -565,8 +529,6 @@ export const ControlMatrixPage: React.FC = () => {
                     </div>
                 </div>
             </div>
-
-            {(isAssignOpen || isPauseModalOpen) && <div className="overlay active" onClick={() => { if (isPauseModalOpen) setIsPauseModalOpen(false); else closeAssign(); }} style={{ zIndex: 2550 }}></div>}
         </>
     );
 };

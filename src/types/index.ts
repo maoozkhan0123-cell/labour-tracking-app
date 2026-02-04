@@ -6,6 +6,19 @@ export interface User {
     role: 'manager' | 'employee';
     password?: string;
     hourly_rate: number;
+    status?: 'offline' | 'present'; // Clocked status
+    availability?: 'available' | 'break'; // Break status
+    last_status_change?: string;
+}
+
+export interface ActivityLog {
+    id: string;
+    worker_id: string;
+    event_type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end' | 'task_start' | 'task_stop' | 'task_pause' | 'task_resume' | 'task_complete';
+    related_task_id?: string;
+    description: string;
+    details?: string;
+    timestamp: string;
 }
 
 export interface Task {

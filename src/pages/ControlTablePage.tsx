@@ -6,7 +6,7 @@ export const ControlTablePage: React.FC = () => {
     const [employees, setEmployees] = useState<any[]>([]);
     const [mos, setMos] = useState<any[]>([]);
     const [operations, setOperations] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    // isLoading removed as unused
 
     // Filters
     const [search, setSearch] = useState('');
@@ -39,13 +39,32 @@ export const ControlTablePage: React.FC = () => {
         active_minutes: 0
     });
 
+    const [activeChip, setActiveChip] = useState('Today'); // Move useState to top level
+
+    // Auto-calculate duration for Manual Entry
     useEffect(() => {
-        fetchData();
-        const interval = setInterval(() => {
-            setTasks(prev => [...prev]);
-        }, 1000);
-        return () => clearInterval(interval);
-    }, []);
+        if (createForm.start_time && createForm.end_time) {
+            const start = new Date(createForm.start_time);
+            const end = new Date(createForm.end_time);
+
+            // Calculate if valid dates
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                const diffMs = end.getTime() - start.getTime();
+                // If negative (End < Start), treat as 0 duration
+                const totalMinutes = diffMs > 0 ? Math.floor(diffMs / 60000) : 0;
+
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = totalMinutes % 60;
+
+                setCreateForm(prev => ({
+                    ...prev,
+                    active_hours: hours,
+                    active_minutes: minutes
+                }));
+            }
+        }
+    }, [createForm.start_time, createForm.end_time]);
+
 
     const fetchData = async () => {
         try {
@@ -68,7 +87,7 @@ export const ControlTablePage: React.FC = () => {
         } catch (err) {
             console.error('Error fetching table data:', err);
         } finally {
-            setIsLoading(false);
+            // Loading state removed
         }
     };
 
@@ -102,11 +121,10 @@ export const ControlTablePage: React.FC = () => {
     const getStatusLabel = (status: string) => {
         const s = status?.toLowerCase();
         if (s === 'active') return <span className="status-badge badge-green" style={{ fontSize: '0.7rem' }}>TIMER RUNNING</span>;
-        if (s === 'break') return <span className="status-badge badge-yellow" style={{ fontSize: '0.7rem' }}>ON BREAK</span>;
         if (s === 'clocked_in') return <span className="status-badge badge-blue" style={{ fontSize: '0.7rem' }}>CLOCKED IN</span>;
-        if (s === 'completed') return <span className="status-badge badge-gray" style={{ fontSize: '0.7rem', background: '#e5e7eb', color: '#374151' }}>COMPLETED</span>;
-        if (s === 'clocked_out') return <span className="status-badge badge-gray" style={{ fontSize: '0.7rem', background: '#e5e7eb', color: '#374151' }}>CLOCKED OUT</span>;
-        return <span className="status-badge badge-gray" style={{ fontSize: '0.7rem', background: '#e5e7eb', color: '#374151' }}>{status.toUpperCase()}</span>;
+        if (s === 'break') return <span className="status-badge badge-yellow" style={{ fontSize: '0.7rem' }}>ON BREAK</span>;
+        if (s === 'completed') return <span className="status-badge badge-gray" style={{ fontSize: '0.7rem' }}>COMPLETED</span>;
+        return <span className="status-badge badge-gray" style={{ fontSize: '0.7rem' }}>PENDING</span>;
     };
 
     const handleEditClick = (task: any) => {
@@ -129,6 +147,15 @@ export const ControlTablePage: React.FC = () => {
 
     const handleUpdateTask = async () => {
         if (!editingTask) return;
+
+        // Check if worker is on break when setting to active
+        if (editForm.status === 'active') {
+            const worker = employees.find(e => e.id === editingTask.assigned_to_id);
+            if (worker && worker.availability === 'break') {
+                alert(`Cannot start timer. ${worker.name} is currently on break.`);
+                return;
+            }
+        }
 
         // Calculate total seconds
         const totalSeconds = (parseInt(String(editForm.active_hours)) * 3600) + (parseInt(String(editForm.active_minutes)) * 60);
@@ -167,7 +194,13 @@ export const ControlTablePage: React.FC = () => {
             worker_id: '',
             mo_reference: '',
             description: '',
-            start_time: new Date().toISOString().substring(0, 16),
+            description: '',
+            // Use local time for default
+            start_time: (() => {
+                const now = new Date();
+                now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                return now.toISOString().slice(0, 16);
+            })(),
             end_time: '',
             status: 'pending',
             active_hours: 0,
@@ -182,8 +215,14 @@ export const ControlTablePage: React.FC = () => {
             return;
         }
 
-        const totalSeconds = (parseInt(String(createForm.active_hours)) * 3600) + (parseInt(String(createForm.active_minutes)) * 60);
         const emp = employees.find(e => e.id === createForm.worker_id);
+
+        if (createForm.status === 'active' && emp?.availability === 'break') {
+            alert(`Cannot start timer. ${emp.name} is currently on break.`);
+            return;
+        }
+
+        const totalSeconds = (parseInt(String(createForm.active_hours)) * 3600) + (parseInt(String(createForm.active_minutes)) * 60);
 
         const newTask: any = {
             assigned_to_id: createForm.worker_id,
@@ -214,9 +253,9 @@ export const ControlTablePage: React.FC = () => {
     };
 
     const filteredTasks = tasks.filter(t => {
-        const matchesSearch = t.mo_reference.toLowerCase().includes(search.toLowerCase()) ||
-            t.description.toLowerCase().includes(search.toLowerCase()) ||
-            t.worker_name.toLowerCase().includes(search.toLowerCase());
+        const matchesSearch = (t.mo_reference || '').toLowerCase().includes(search.toLowerCase()) ||
+            (t.description || '').toLowerCase().includes(search.toLowerCase()) ||
+            (t.worker_name || '').toLowerCase().includes(search.toLowerCase());
 
         const matchesWorker = workerFilter === 'all' || t.worker_name === workerFilter;
 
@@ -227,18 +266,88 @@ export const ControlTablePage: React.FC = () => {
             (statusFilter === 'completed' && t.status === 'completed') ||
             (statusFilter === 'pending' && t.status === 'pending');
 
-        return matchesSearch && matchesWorker && matchesStatus;
+        let matchesDate = true;
+        if (startDate) {
+            const taskDate = new Date(t.created_at || t.start_time);
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            if (taskDate < start) matchesDate = false;
+        }
+        if (endDate) {
+            const taskDate = new Date(t.created_at || t.start_time);
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            if (taskDate > end) matchesDate = false;
+        }
+
+        return matchesSearch && matchesWorker && matchesStatus && matchesDate;
     });
 
-    if (isLoading) return <div className="loading-screen">Loading Table...</div>;
+    // if (isLoading) return <div className="loading-screen">Loading Table...</div>;
+
+
+
+
+    const applyDateFilter = (filterType: string) => {
+        const now = new Date();
+        let start = '';
+        let end = '';
+
+        if (filterType === 'All') {
+            start = '';
+            end = '';
+        } else if (filterType === 'Today') {
+            start = now.toISOString().split('T')[0];
+            end = now.toISOString().split('T')[0];
+        } else if (filterType === 'This Week') {
+            const first = now.getDate() - now.getDay();
+            const last = first + 6;
+            const firstDay = new Date(now.setDate(first));
+            const lastDay = new Date(now.setDate(last));
+            start = firstDay.toISOString().split('T')[0];
+            end = lastDay.toISOString().split('T')[0];
+        } else if (filterType === 'Last Week') {
+            const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const first = lastWeek.getDate() - lastWeek.getDay();
+            const last = first + 6;
+            const firstDay = new Date(lastWeek.setDate(first));
+            const lastDay = new Date(lastWeek.setDate(last));
+            start = firstDay.toISOString().split('T')[0];
+            end = lastDay.toISOString().split('T')[0];
+        } else if (filterType === 'This Month') {
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            start = firstDay.toISOString().split('T')[0];
+            end = lastDay.toISOString().split('T')[0];
+        } else if (filterType === 'Last Month') {
+            const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+            start = firstDay.toISOString().split('T')[0];
+            end = lastDay.toISOString().split('T')[0];
+        }
+
+        setStartDate(start);
+        setEndDate(end);
+        setActiveChip(filterType);
+    };
 
     const resetFilters = () => {
         setSearch('');
         setWorkerFilter('all');
         setStatusFilter('all');
-        setStartDate('');
-        setEndDate('');
+        applyDateFilter('All'); // Changed to 'All'
     };
+
+    useEffect(() => {
+        // Initial date filter application
+        applyDateFilter('All'); // Changed to 'All'
+
+        fetchData();
+        const interval = setInterval(() => {
+            setTasks(prev => [...prev]);
+        }, 1000);
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <>
@@ -252,32 +361,25 @@ export const ControlTablePage: React.FC = () => {
                 </button>
             </div>
 
+            {/* Search Filter Bar (Restored Inline Styles) */}
             <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', background: 'white', padding: '1rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
                 <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
                     <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}></i>
                     <input
                         type="text"
+                        placeholder="Search MO, Operation, or Worker..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search MO, Operation, or Worker..."
                         style={{ width: '100%', padding: '0.6rem 1rem 0.6rem 2.25rem', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none' }}
                     />
                 </div>
 
-                <select
-                    value={workerFilter}
-                    onChange={(e) => setWorkerFilter(e.target.value)}
-                    style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none', background: 'white' }}
-                >
+                <select value={workerFilter} onChange={(e) => setWorkerFilter(e.target.value)} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none', background: 'white' }}>
                     <option value="all">All Workers</option>
                     {employees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
                 </select>
 
-                <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none', background: 'white' }}
-                >
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid #CBD5E1', outline: 'none', background: 'white' }}>
                     <option value="all">All Statuses</option>
                     <option value="timer running">Timer Running</option>
                     <option value="clocked in">Clocked In</option>
@@ -288,17 +390,44 @@ export const ControlTablePage: React.FC = () => {
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#F8FAFC', padding: '0.25rem 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1' }}>
                     <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>From:</span>
-                    <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.85rem', color: '#475569' }} />
+                    <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setActiveChip(''); }} style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.85rem', color: '#475569' }} />
                 </div>
-
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#F8FAFC', padding: '0.25rem 0.75rem', borderRadius: '8px', border: '1px solid #CBD5E1' }}>
                     <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>To:</span>
-                    <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.85rem', color: '#475569' }} />
+                    <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setActiveChip(''); }} style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.85rem', color: '#475569' }} />
                 </div>
 
-                <button onClick={resetFilters} style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'white', color: '#64748B', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>
+                <button className="btn btn-secondary" onClick={resetFilters} style={{ background: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0' }}>
                     Reset
                 </button>
+            </div>
+
+            {/* Date Filter Chips Row - BELOW Search Bar */}
+            <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '0.8rem', flexWrap: 'wrap', alignItems: 'center', paddingLeft: '0.25rem' }}>
+                {['All', 'Today', 'This Week', 'Last Week', 'This Month', 'Last Month'].map(label => {
+                    const isActive = activeChip === label;
+                    return (
+                        <button
+                            key={label}
+                            onClick={() => applyDateFilter(label)}
+                            className={`chip-btn ${isActive ? 'active' : ''}`}
+                            style={{
+                                padding: '0.5rem 1.25rem',
+                                borderRadius: '50px',
+                                border: isActive ? 'none' : '1px solid #E2E8F0',
+                                background: isActive ? 'var(--primary)' : 'white',
+                                color: isActive ? 'white' : '#64748B',
+                                fontSize: '0.85rem',
+                                fontWeight: isActive ? 600 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: isActive ? '0 4px 6px -1px rgba(30, 41, 59, 0.2)' : 'none'
+                            }}
+                        >
+                            {label}
+                        </button>
+                    );
+                })}
             </div>
 
             <div className="section-card">
@@ -374,7 +503,7 @@ export const ControlTablePage: React.FC = () => {
             {/* Edit Modal (Compact) */}
             <div className={`offcanvas ${isEditOpen ? 'show' : ''}`} style={{
                 right: 'auto', left: '50%', top: '50%', transform: `translate(-50%, -50%)`,
-                width: '500px', height: 'auto', maxHeight: '90vh', overflowY: 'auto',
+                width: '700px', height: 'auto', maxHeight: '90vh', overflowY: 'auto',
                 borderRadius: '12px', opacity: isEditOpen ? 1 : 0,
                 pointerEvents: isEditOpen ? 'all' : 'none',
                 transition: 'opacity 0.2s', zIndex: 3001, background: 'white', position: 'fixed',
@@ -397,7 +526,7 @@ export const ControlTablePage: React.FC = () => {
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
                                         <div style={{ fontSize: '0.8rem', color: '#64748B' }}>Task</div>
-                                        <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{editingTask.mo_reference} - {editingTask.description}</div>
+                                        <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{editingTask.description}</div>
                                     </div>
                                 </div>
                             </div>
