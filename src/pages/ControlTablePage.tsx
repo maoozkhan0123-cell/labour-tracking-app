@@ -56,11 +56,15 @@ export const ControlTablePage: React.FC = () => {
                 const hours = Math.floor(totalMinutes / 60);
                 const minutes = totalMinutes % 60;
 
-                setCreateForm(prev => ({
-                    ...prev,
-                    active_hours: hours,
-                    active_minutes: minutes
-                }));
+                setCreateForm(prev => {
+                    // Only update if values are different to avoid potential loops (though dependency array handles this)
+                    if (prev.active_hours === hours && prev.active_minutes === minutes) return prev;
+                    return {
+                        ...prev,
+                        active_hours: hours,
+                        active_minutes: minutes
+                    };
+                });
             }
         }
     }, [createForm.start_time, createForm.end_time]);

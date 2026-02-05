@@ -6,6 +6,7 @@ export const WorkersPage: React.FC = () => {
     const [workers, setWorkers] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [showArchived, setShowArchived] = useState(false);
 
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
@@ -16,9 +17,36 @@ export const WorkersPage: React.FC = () => {
 
     const fetchWorkers = async () => {
         setIsLoading(true);
+        // Fetch ALL workers. Order by name (safer than created_at which might be missing)
         const { data } = await supabase.from('users').select('*').eq('role', 'employee').order('name', { ascending: true }) as { data: any[] };
         if (data) setWorkers(data);
         setIsLoading(false);
+    };
+
+    const generateNextWorkerId = () => {
+        const ids = workers.map(w => w.worker_id).filter(id => id && id.startsWith('W-'));
+        if (ids.length === 0) return 'W-001';
+
+        // Extract numbers
+        const nums = ids.map(id => parseInt(id.replace('W-', ''), 10)).filter(n => !isNaN(n));
+        if (nums.length === 0) return 'W-001';
+
+        const maxNum = Math.max(...nums);
+        const nextNum = maxNum + 1;
+        return `W-${String(nextNum).padStart(3, '0')}`;
+    };
+
+    const handleAddClick = () => {
+        const nextId = generateNextWorkerId();
+        setFormData({
+            worker_id: nextId,
+            name: '',
+            username: '',
+            rate: '',
+            password: '',
+            active: true
+        });
+        setIsAddOpen(true);
     };
 
     const handleHire = async () => {
@@ -33,7 +61,8 @@ export const WorkersPage: React.FC = () => {
             worker_id: formData.worker_id,
             hourly_rate: parseFloat(formData.rate),
             password: defaultPassword, // Set default password
-            role: 'employee'
+            role: 'employee',
+            active: true
         });
 
         if (!error) {
@@ -60,9 +89,11 @@ export const WorkersPage: React.FC = () => {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to remove this worker?')) return;
-        const { error } = await supabase.from('users').delete().eq('id', id);
+    const handleArchive = async (id: string, currentStatus: boolean) => {
+        const action = currentStatus ? 'archive' : 'restore';
+        if (!confirm(`Are you sure you want to ${action} this worker?`)) return;
+
+        const { error } = await (supabase.from('users') as any).update({ active: !currentStatus }).eq('id', id);
         if (!error) fetchWorkers();
     };
 
@@ -76,7 +107,7 @@ export const WorkersPage: React.FC = () => {
         setFormData({
             worker_id: worker.worker_id || '',
             name: worker.name || '',
-            username: worker.username || '',
+            username: (worker.username || '').replace('@BabylonLLC.com', ''), // Strip domain for edit if it was added in view
             rate: worker.hourly_rate?.toString() || '0',
             password: '',
             active: worker.active !== false
@@ -84,11 +115,18 @@ export const WorkersPage: React.FC = () => {
         setIsEditOpen(true);
     };
 
-    const filteredWorkers = workers.filter(w =>
-        w.name?.toLowerCase().includes(search.toLowerCase()) ||
-        w.worker_id?.toLowerCase().includes(search.toLowerCase()) ||
-        w.username?.toLowerCase().includes(search.toLowerCase())
-    );
+    const filteredWorkers = workers.filter(w => {
+        // Filter by archive status first
+        if (!showArchived && w.active === false) return false;
+        if (showArchived && w.active !== false) return false;
+
+        // Then search
+        return (
+            w.name?.toLowerCase().includes(search.toLowerCase()) ||
+            w.worker_id?.toLowerCase().includes(search.toLowerCase()) ||
+            w.username?.toLowerCase().includes(search.toLowerCase())
+        );
+    });
 
     if (isLoading) return <div className="loading-screen">Loading Workers...</div>;
 
@@ -99,10 +137,16 @@ export const WorkersPage: React.FC = () => {
                     <h1 className="page-title">Workers</h1>
                     <p className="page-subtitle">Manage manufacturing workers</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => setIsAddOpen(true)}
-                    style={{ width: 'auto', padding: '0.75rem 1.5rem', background: '#000', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600 }}>
-                    <i className="fa-solid fa-plus"></i> Add Worker
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="btn btn-secondary" onClick={() => setShowArchived(!showArchived)}
+                        style={{ width: 'auto', padding: '0.75rem 1.0rem', background: '#F1F5F9', color: '#64748B', border: '1px solid #E2E8F0', borderRadius: '8px', fontWeight: 600 }}>
+                        {showArchived ? <><i className="fa-solid fa-users"></i> Show Active</> : <><i className="fa-solid fa-box-archive"></i> Show Archived</>}
+                    </button>
+                    <button className="btn btn-primary" onClick={handleAddClick}
+                        style={{ width: 'auto', padding: '0.75rem 1.5rem', background: '#000', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 600 }}>
+                        <i className="fa-solid fa-plus"></i> Add Worker
+                    </button>
+                </div>
             </div>
 
             <div style={{ marginBottom: '2rem' }}>
@@ -132,23 +176,56 @@ export const WorkersPage: React.FC = () => {
                     </thead>
                     <tbody>
                         {filteredWorkers.map(worker => (
-                            <tr key={worker.id}>
+                            <tr key={worker.id} style={{ opacity: worker.active === false ? 0.6 : 1 }}>
                                 <td style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, color: '#64748B' }}>{worker.worker_id || '-'}</td>
                                 <td>
-                                    <div className="user-cell">
-                                        <div className="avatar-circle">{worker.name?.[0] || '?'}</div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <div style={{
+                                            width: '36px',
+                                            height: '36px',
+                                            borderRadius: '50%',
+                                            background: worker.active === false ? '#94A3B8' : 'var(--primary, #0F172A)',
+                                            color: 'white',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontWeight: 600,
+                                            fontSize: '0.9rem',
+                                            flexShrink: 0
+                                        }}>
+                                            {worker.name?.[0]?.toUpperCase() || '?'}
+                                        </div>
                                         <Link to="/employee-activity" style={{ fontWeight: 600, textDecoration: 'none', color: 'inherit' }}>{worker.name}</Link>
                                     </div>
                                 </td>
-                                <td style={{ color: 'var(--text-muted)' }}>{worker.username}@BabylonLLC.com</td>
+                                <td style={{ color: 'var(--text-muted)' }}>{worker.username}</td>
                                 <td style={{ color: 'var(--text-muted)', fontWeight: 500 }}>$ {parseFloat(worker.hourly_rate || 0).toFixed(2)}/hr</td>
-                                <td><span className="badge badge-active">Active</span></td>
+                                <td>
+                                    {worker.active === false
+                                        ? <span className="badge badge-gray">Archived</span>
+                                        : <span className="badge badge-active">Active</span>
+                                    }
+                                </td>
                                 <td style={{ textAlign: 'right' }}>
                                     <button className="icon-btn" title="Edit" onClick={() => openEdit(worker)}><i className="fa-solid fa-pen"></i></button>
-                                    <button className="icon-btn delete" title="Delete" onClick={() => handleDelete(worker.id)}><i className="fa-regular fa-trash-can"></i></button>
+                                    <button
+                                        className="icon-btn delete"
+                                        title={worker.active === false ? "Restore" : "Archive"}
+                                        onClick={() => handleArchive(worker.id, worker.active !== false)}
+                                        style={{ color: worker.active === false ? '#22C55E' : '#EF4444' }}
+                                    >
+                                        <i className={`fa-solid ${worker.active === false ? 'fa-rotate-left' : 'fa-box-archive'}`}></i>
+                                    </button>
                                 </td>
                             </tr>
                         ))}
+                        {filteredWorkers.length === 0 && (
+                            <tr>
+                                <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8' }}>
+                                    No {showArchived ? 'archived' : 'active'} workers found.
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -161,16 +238,16 @@ export const WorkersPage: React.FC = () => {
                 </div>
                 <div style={{ padding: '0 2rem 2rem' }}>
                     <div style={{ marginBottom: '1.25rem' }}>
-                        <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#111', fontSize: '0.95rem' }}>Worker ID (Unique / Required)</label>
-                        <input type="text" value={formData.worker_id} onChange={e => setFormData({ ...formData, worker_id: e.target.value })} placeholder="e.g. W-1001" style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1.5px solid #DDD' }} />
+                        <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#111', fontSize: '0.95rem' }}>Worker ID (Auto-Generated)</label>
+                        <input type="text" value={formData.worker_id} readOnly placeholder="e.g. W-001" style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#64748B', cursor: 'not-allowed' }} />
                     </div>
                     <div style={{ marginBottom: '1.25rem' }}>
                         <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#111', fontSize: '0.95rem' }}>Full Name</label>
                         <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Enter worker name" style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1.5px solid #DDD' }} />
                     </div>
                     <div style={{ marginBottom: '1.25rem' }}>
-                        <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#111', fontSize: '0.95rem' }}>Email</label>
-                        <input type="email" value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} placeholder="worker@company.com" style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1.5px solid #DDD' }} />
+                        <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#111', fontSize: '0.95rem' }}>Email / Username</label>
+                        <input type="text" value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} placeholder="worker@company.com" style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1.5px solid #DDD' }} />
                     </div>
                     <div style={{ marginBottom: '1.25rem' }}>
                         <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#111', fontSize: '0.95rem' }}>Hourly Rate ($)</label>
@@ -200,8 +277,8 @@ export const WorkersPage: React.FC = () => {
                         <input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1.5px solid #DDD' }} />
                     </div>
                     <div style={{ marginBottom: '1.25rem' }}>
-                        <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#111', fontSize: '0.95rem' }}>Email</label>
-                        <input type="email" value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1.5px solid #DDD' }} />
+                        <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#111', fontSize: '0.95rem' }}>Email / Username</label>
+                        <input type="text" value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1.5px solid #DDD' }} />
                     </div>
                     <div style={{ marginBottom: '1.25rem' }}>
                         <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#111', fontSize: '0.95rem' }}>Hourly Rate ($)</label>

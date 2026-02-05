@@ -64,10 +64,30 @@ export const performTaskAction = async (
 
         // 2. Log Activity (if event type exists)
         if (eventType) {
+            // Fetch PO Number for better logging
+            let logDescription = task.description;
+            try {
+                if (task.mo_reference) {
+                    const { data: mo } = await (supabase
+                        .from('manufacturing_orders')
+                        .select('po_number')
+                        .eq('mo_number', task.mo_reference)
+                        .maybeSingle() as any);
+
+                    const poText = mo?.po_number ? `PO: ${mo.po_number}` : '';
+                    // Format: "Operation (MO #1 • PO: 123)" or "Operation (MO #1)"
+                    const extraInfo = [`MO #${task.mo_reference}`, poText].filter(Boolean).join(' • ');
+                    logDescription = `${task.description} (${extraInfo})`;
+                }
+            } catch (err) {
+                console.warn('Could not fetch PO number for log', err);
+                logDescription = `${task.description} - ${task.mo_reference}`;
+            }
+
             await logActivity(
                 task.assigned_to_id,
                 eventType,
-                task.description, // Operation Name
+                logDescription,
                 reason || undefined,
                 task.id
             );

@@ -268,51 +268,55 @@ export const ControlMatrixPage: React.FC = () => {
                                     {mo.product_name}
                                 </div>
                                 <div style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                    {mo.origin && <div><span style={{ fontWeight: 600 }}>PO:</span> {mo.origin}</div>}
-                                    {mo.product_default_code && <div><span style={{ fontWeight: 600 }}>SKU:</span> {mo.product_default_code}</div>}
+                                    {mo.po_number && <div><span style={{ fontWeight: 600 }}>PO:</span> {mo.po_number}</div>}
+                                    {mo.sku && <div><span style={{ fontWeight: 600 }}>SKU:</span> {mo.sku}</div>}
+                                    {mo.scheduled_date && <div><span style={{ fontWeight: 600 }}>Scheduled:</span> {mo.scheduled_date}</div>}
                                     <div><span style={{ fontWeight: 600 }}>Qty:</span> {mo.quantity || 0}</div>
                                     <div><span className={`status-badge badge-${(mo.current_status || 'draft').toLowerCase()}`}>{mo.current_status}</span></div>
                                 </div>
                             </div>
 
-                            {operations.map(op => {
-                                const cellTasks = getTasksForCell(mo.mo_number, op);
-                                const hasActive = cellTasks.some(t => t.status === 'active');
-                                return (
-                                    <div
-                                        key={op}
-                                        className={`matrix-cell ${cellTasks.length > 0 ? 'active-cell' : ''} ${hasActive ? 'timer-running' : ''}`}
-                                        onClick={() => handleCellClick(mo.mo_number, op, mo.product_name)}
-                                    >
-                                        {cellTasks.length > 0 ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
-                                                <div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: '4px' }}>
-                                                    {cellTasks.length} workers
+                            {
+                                operations.map(op => {
+                                    const cellTasks = getTasksForCell(mo.mo_number, op);
+                                    const hasActive = cellTasks.some(t => t.status === 'active');
+                                    return (
+                                        <div
+                                            key={op}
+                                            className={`matrix-cell ${cellTasks.length > 0 ? 'active-cell' : ''} ${hasActive ? 'timer-running' : ''}`}
+                                            onClick={() => handleCellClick(mo.mo_number, op, mo.product_name)}
+                                        >
+                                            {cellTasks.length > 0 ? (
+                                                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+                                                    <div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: '4px' }}>
+                                                        {cellTasks.length} workers
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', marginTop: '8px' }}>
+                                                        {cellTasks.slice(0, 3).map(t => {
+                                                            const worker = employees.find(e => e.id === t.assigned_to_id);
+                                                            return (
+                                                                <div key={t.id} className="worker-avatar" title={worker?.name}>
+                                                                    {worker?.name?.[0] || '?'}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
-                                                <div style={{ display: 'flex', alignItems: 'center', marginTop: '8px' }}>
-                                                    {cellTasks.slice(0, 3).map(t => {
-                                                        const worker = employees.find(e => e.id === t.assigned_to_id);
-                                                        return (
-                                                            <div key={t.id} className="worker-avatar" title={worker?.name}>
-                                                                {worker?.name?.[0] || '?'}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="matrix-cell-empty">Assign</div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                                            ) : (
+                                                <div className="matrix-cell-empty">Assign</div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            }
                         </div>
                     ))}
                 </div>
-            </div>
+            </div >
 
             {/* Assignments Modal */}
-            <div className={`assign-modal ${isAssignOpen ? 'active' : ''}`} style={{
+            < div className={`assign-modal ${isAssignOpen ? 'active' : ''}`
+            } style={{
                 width: '640px', maxHeight: '85vh', position: 'fixed', left: '50%', top: '50%',
                 transform: `translate(-50%, -50%) scale(${isAssignOpen ? 1 : 0.9})`,
                 opacity: isAssignOpen ? 1 : 0, pointerEvents: isAssignOpen ? 'auto' : 'none',
@@ -459,10 +463,10 @@ export const ControlMatrixPage: React.FC = () => {
                         })}
                     </div>
                 </div>
-            </div>
+            </div >
 
             {/* Manual Pause Modal */}
-            <div className={`modal-backdrop ${isPauseModalOpen ? 'active' : ''}`} style={{
+            < div className={`modal-backdrop ${isPauseModalOpen ? 'active' : ''}`} style={{
                 position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
                 background: 'rgba(0,0,0,0.5)', zIndex: 3000,
                 display: isPauseModalOpen ? 'flex' : 'none',
@@ -528,7 +532,7 @@ export const ControlMatrixPage: React.FC = () => {
                         </button>
                     </div>
                 </div>
-            </div>
+            </div >
         </>
     );
 };
