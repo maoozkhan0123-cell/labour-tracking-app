@@ -56,8 +56,8 @@ export const ControlMatrixPage: React.FC = () => {
 
             if (moData) {
                 const sortedMos = (moData as any[]).sort((a, b) => {
-                    const numA = parseInt(a.mo_number.replace(/\D/g, '')) || 0;
-                    const numB = parseInt(b.mo_number.replace(/\D/g, '')) || 0;
+                    const numA = parseInt((a.mo_number || '').replace(/\D/g, '')) || 0;
+                    const numB = parseInt((b.mo_number || '').replace(/\D/g, '')) || 0;
                     return numA - numB;
                 });
                 setMos(sortedMos);

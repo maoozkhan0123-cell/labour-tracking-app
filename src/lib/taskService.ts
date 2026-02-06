@@ -148,6 +148,11 @@ export const pauseAllTasksManual = async (workerId: string) => {
     for (const task of tasks as any[]) {
         if (task.status === 'active' || task.status === 'break') {
             await performTaskAction(task, 'pause', 'Shift Ended');
+            // Ensure last action time matches clock out if needed, though pause sets it to now. 
+            // Ideally performTaskAction handles time. 
+            // BUT, to be precise, we rely on performTaskAction using 'now'.
+            // If we want exact sync with a passed 'now', we'd need to refactor performTaskAction to accept a timestamp.
+            // For now, sequentially running this is close enough to "clock out time"
         }
     }
 };

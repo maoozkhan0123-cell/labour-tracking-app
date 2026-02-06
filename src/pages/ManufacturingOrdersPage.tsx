@@ -1,22 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import type { ManufacturingOrder } from '../types';
 import { Link } from 'react-router-dom';
 
-// Define the interface for the Order object - Ensures type safety
-interface ManufacturingOrder {
-    id: string;
-    mo_number: string;
-    product_name: string;
-    sku: string;
-    quantity: number;
-    po_number: string;
-    event_id: string;
-    scheduled_date: string;
-    current_status: string;
-    created_at?: string;
-    is_pinned?: boolean;
-    sort_order?: number;
-}
+
 
 export const ManufacturingOrdersPage: React.FC = () => {
     // Explicitly typed state
@@ -64,8 +51,8 @@ export const ManufacturingOrdersPage: React.FC = () => {
                     }
 
                     // Fallback MO Number sorting
-                    const numA = parseInt(a.mo_number.replace(/\D/g, '')) || 0;
-                    const numB = parseInt(b.mo_number.replace(/\D/g, '')) || 0;
+                    const numA = parseInt((a.mo_number || '').replace(/\D/g, '')) || 0;
+                    const numB = parseInt((b.mo_number || '').replace(/\D/g, '')) || 0;
                     return numA - numB;
                 });
                 setOrders(sorted);

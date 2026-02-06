@@ -41,11 +41,17 @@ export interface Task {
 
 export interface ManufacturingOrder {
     id: string;
-    name: string;
-    product: string;
-    status: string;
-    dates: string;
-    created_at: string;
+    mo_number: string;
+    product_name: string;
+    sku: string;
+    quantity: number;
+    po_number: string;
+    event_id: string;
+    scheduled_date: string;
+    current_status: string;
+    created_at?: string;
+    is_pinned?: boolean;
+    sort_order?: number;
 }
 
 export interface Operation {

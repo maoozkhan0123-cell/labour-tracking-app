@@ -19,8 +19,10 @@ export const ControlTablePage: React.FC = () => {
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [editingTask, setEditingTask] = useState<any>(null);
     const [editForm, setEditForm] = useState({
+        created_at: '',
         start_time: '',
         end_time: '',
+        last_action_time: '',
         status: '',
         active_hours: 0,
         active_minutes: 0
@@ -32,8 +34,10 @@ export const ControlTablePage: React.FC = () => {
         worker_id: '',
         mo_reference: '',
         description: '', // Operation name
+        created_at: '', // Clock In
         start_time: '',
         end_time: '',
+        last_action_time: '',
         status: 'pending',
         active_hours: 0,
         active_minutes: 0
@@ -43,9 +47,10 @@ export const ControlTablePage: React.FC = () => {
 
     // Auto-calculate duration for Manual Entry
     useEffect(() => {
-        if (createForm.start_time && createForm.end_time) {
+        if (createForm.start_time && (createForm.end_time || createForm.last_action_time)) {
             const start = new Date(createForm.start_time);
-            const end = new Date(createForm.end_time);
+            // Use end_time, fallback to last_action_time
+            const end = new Date(createForm.end_time || createForm.last_action_time);
 
             // Calculate if valid dates
             if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
@@ -67,7 +72,36 @@ export const ControlTablePage: React.FC = () => {
                 });
             }
         }
-    }, [createForm.start_time, createForm.end_time]);
+    }, [createForm.start_time, createForm.end_time, createForm.last_action_time]);
+
+    // Auto-calculate duration for Edit Entry
+    useEffect(() => {
+        if (editForm.start_time && (editForm.end_time || editForm.last_action_time)) {
+            const start = new Date(editForm.start_time);
+            // Use end_time, fallback to last_action_time
+            const end = new Date(editForm.end_time || editForm.last_action_time);
+
+            // Calculate if valid dates
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                const diffMs = end.getTime() - start.getTime();
+                // If negative (End < Start), treat as 0 duration
+                const totalMinutes = diffMs > 0 ? Math.floor(diffMs / 60000) : 0;
+
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = totalMinutes % 60;
+
+                setEditForm(prev => {
+                    // Only update if values are different to avoid potential loops
+                    if (prev.active_hours === hours && prev.active_minutes === minutes) return prev;
+                    return {
+                        ...prev,
+                        active_hours: hours,
+                        active_minutes: minutes
+                    };
+                });
+            }
+        }
+    }, [editForm.start_time, editForm.end_time, editForm.last_action_time]);
 
 
     const fetchData = async () => {
@@ -140,8 +174,10 @@ export const ControlTablePage: React.FC = () => {
         const m = Math.floor((totalSec % 3600) / 60);
 
         setEditForm({
+            created_at: task.created_at ? task.created_at.substring(0, 16) : '',
             start_time: task.start_time ? task.start_time.substring(0, 16) : '',
-            end_time: (task.end_time || task.last_action_time) ? (task.end_time || task.last_action_time).substring(0, 16) : '',
+            end_time: task.end_time ? task.end_time.substring(0, 16) : '',
+            last_action_time: task.last_action_time ? task.last_action_time.substring(0, 16) : '',
             status: task.status,
             active_hours: h,
             active_minutes: m
@@ -161,26 +197,43 @@ export const ControlTablePage: React.FC = () => {
             }
         }
 
-        // Calculate total seconds
-        const totalSeconds = (parseInt(String(editForm.active_hours)) * 3600) + (parseInt(String(editForm.active_minutes)) * 60);
+        // Calculate active_seconds logic:
+        // Prioritize actual time difference if start and end are provided
+        // Otherwise fallback to manual duration inputs
+        let totalSeconds = 0;
+        if (editForm.start_time && editForm.end_time) {
+            const start = new Date(editForm.start_time).getTime();
+            const end = new Date(editForm.end_time).getTime();
+            if (!isNaN(start) && !isNaN(end) && end >= start) {
+                totalSeconds = Math.floor((end - start) / 1000);
+            } else {
+                // Fallback if invalid range
+                totalSeconds = (parseInt(String(editForm.active_hours)) * 3600) + (parseInt(String(editForm.active_minutes)) * 60);
+            }
+        } else {
+            // No end time, trust the manual duration
+            totalSeconds = (parseInt(String(editForm.active_hours)) * 3600) + (parseInt(String(editForm.active_minutes)) * 60);
+        }
 
         // Prepare updates
         const updates: any = {
             status: editForm.status,
             active_seconds: totalSeconds,
+            created_at: editForm.created_at ? new Date(editForm.created_at).toISOString() : editingTask.created_at,
             start_time: editForm.start_time ? new Date(editForm.start_time).toISOString() : null,
+            last_action_time: editForm.last_action_time ? new Date(editForm.last_action_time).toISOString() : editingTask.last_action_time,
         };
 
-        // If status is completed, ensure end_time is set
-        if (editForm.status === 'completed' && editForm.end_time) {
+        // If end_time is provided, force status to completed so it saves correctly
+        if (editForm.end_time) {
             updates.end_time = new Date(editForm.end_time).toISOString();
+            // If last action time wasn't manually set, sync it with end time
+            if (!editForm.last_action_time) {
+                updates.last_action_time = updates.end_time;
+            }
+            updates.status = 'completed';
         } else if (editForm.status !== 'completed') {
             updates.end_time = null; // Clear end time if not completed
-        }
-
-        // Also update last_action_time if provided for other statuses
-        if (editForm.end_time) {
-            updates.last_action_time = new Date(editForm.end_time).toISOString();
         }
 
         try {
@@ -199,12 +252,18 @@ export const ControlTablePage: React.FC = () => {
             mo_reference: '',
             description: '',
             // Use local time for default
+            created_at: (() => {
+                const now = new Date();
+                now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                return now.toISOString().slice(0, 16);
+            })(),
             start_time: (() => {
                 const now = new Date();
                 now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
                 return now.toISOString().slice(0, 16);
             })(),
             end_time: '',
+            last_action_time: '',
             status: 'pending',
             active_hours: 0,
             active_minutes: 0
@@ -225,7 +284,22 @@ export const ControlTablePage: React.FC = () => {
             return;
         }
 
-        const totalSeconds = (parseInt(String(createForm.active_hours)) * 3600) + (parseInt(String(createForm.active_minutes)) * 60);
+        // Calculate active_seconds logic:
+        // Prioritize actual time difference if start and end are provided
+        // Otherwise fallback to manual duration inputs
+        let totalSeconds = 0;
+        if (createForm.start_time && createForm.end_time) {
+            const start = new Date(createForm.start_time).getTime();
+            const end = new Date(createForm.end_time).getTime();
+            if (!isNaN(start) && !isNaN(end) && end >= start) {
+                totalSeconds = Math.floor((end - start) / 1000);
+            } else {
+                // Fallback
+                totalSeconds = (parseInt(String(createForm.active_hours)) * 3600) + (parseInt(String(createForm.active_minutes)) * 60);
+            }
+        } else {
+            totalSeconds = (parseInt(String(createForm.active_hours)) * 3600) + (parseInt(String(createForm.active_minutes)) * 60);
+        }
 
         const newTask: any = {
             assigned_to_id: createForm.worker_id,
@@ -233,15 +307,21 @@ export const ControlTablePage: React.FC = () => {
             description: createForm.description,
             status: createForm.status,
             active_seconds: totalSeconds,
+            created_at: createForm.created_at ? new Date(createForm.created_at).toISOString() : new Date().toISOString(),
             start_time: createForm.start_time ? new Date(createForm.start_time).toISOString() : null,
+            last_action_time: createForm.last_action_time ? new Date(createForm.last_action_time).toISOString() : null,
             hourly_rate: emp?.hourly_rate || 0,
             break_seconds: 0
         };
 
-        if (createForm.status === 'completed' && createForm.end_time) {
+        if (createForm.end_time) {
             newTask.end_time = new Date(createForm.end_time).toISOString();
-            newTask.last_action_time = newTask.end_time;
-        } else if (createForm.start_time) {
+            // If last action time wasn't manually set, sync it with end time
+            if (!createForm.last_action_time) {
+                newTask.last_action_time = newTask.end_time;
+            }
+            newTask.status = 'completed'; // Force completed status if end time is present
+        } else if (createForm.start_time && !createForm.last_action_time) {
             newTask.last_action_time = newTask.start_time;
         }
 
@@ -536,6 +616,15 @@ export const ControlTablePage: React.FC = () => {
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                 <div>
+                                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Clock In</label>
+                                    <input
+                                        type="datetime-local"
+                                        value={editForm.created_at}
+                                        onChange={e => setEditForm(prev => ({ ...prev, created_at: e.target.value }))}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
+                                    />
+                                </div>
+                                <div>
                                     <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Start Time</label>
                                     <input
                                         type="datetime-local"
@@ -545,11 +634,20 @@ export const ControlTablePage: React.FC = () => {
                                     />
                                 </div>
                                 <div>
-                                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>End/Last Action</label>
+                                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Clock Out</label>
                                     <input
                                         type="datetime-local"
                                         value={editForm.end_time}
                                         onChange={e => setEditForm(prev => ({ ...prev, end_time: e.target.value }))}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Last Action</label>
+                                    <input
+                                        type="datetime-local"
+                                        value={editForm.last_action_time}
+                                        onChange={e => setEditForm(prev => ({ ...prev, last_action_time: e.target.value }))}
                                         style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
                                     />
                                 </div>
@@ -686,6 +784,15 @@ export const ControlTablePage: React.FC = () => {
                         {/* Row 3: Times */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                             <div>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Clock In</label>
+                                <input
+                                    type="datetime-local"
+                                    value={createForm.created_at}
+                                    onChange={e => setCreateForm(prev => ({ ...prev, created_at: e.target.value }))}
+                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
+                                />
+                            </div>
+                            <div>
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Start Time</label>
                                 <input
                                     type="datetime-local"
@@ -695,11 +802,20 @@ export const ControlTablePage: React.FC = () => {
                                 />
                             </div>
                             <div>
-                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>End Time (Optional)</label>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Clock Out</label>
                                 <input
                                     type="datetime-local"
                                     value={createForm.end_time}
                                     onChange={e => setCreateForm(prev => ({ ...prev, end_time: e.target.value }))}
+                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Last Action</label>
+                                <input
+                                    type="datetime-local"
+                                    value={createForm.last_action_time}
+                                    onChange={e => setCreateForm(prev => ({ ...prev, last_action_time: e.target.value }))}
                                     style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
                                 />
                             </div>

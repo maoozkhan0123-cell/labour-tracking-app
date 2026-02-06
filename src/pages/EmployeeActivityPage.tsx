@@ -68,9 +68,14 @@ export const EmployeeActivityPage: React.FC = () => {
 
         await logActivity(clockOutWorkerId, 'clock_out', 'Clocked Out');
         await updateUserStatus(clockOutWorkerId, 'offline', 'available'); // Reset to available for next shift
+
+        // Wait a moment for triggers/updates
+        setTimeout(() => {
+            fetchData();
+        }, 500);
+
         setShowClockOutModal(false);
         setClockOutWorkerId(null);
-        fetchData();
     };
 
     const toggleBreak = async (worker: User, reason: string = 'Break') => {
