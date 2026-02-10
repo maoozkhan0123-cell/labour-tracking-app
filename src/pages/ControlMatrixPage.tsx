@@ -2,7 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 import { performTaskAction } from '../lib/taskService';
-import type { Task, User } from '../types';
+import type { Task, User, ManufacturingOrder } from '../types';
+import { sortManufacturingOrders } from '../utils/moSorting';
 
 export const ControlMatrixPage: React.FC = () => {
     const [mos, setMos] = useState<any[]>([]);
@@ -55,11 +56,7 @@ export const ControlMatrixPage: React.FC = () => {
             const { data: taskData } = await supabase.from('tasks').select('*');
 
             if (moData) {
-                const sortedMos = (moData as any[]).sort((a, b) => {
-                    const numA = parseInt((a.mo_number || '').replace(/\D/g, '')) || 0;
-                    const numB = parseInt((b.mo_number || '').replace(/\D/g, '')) || 0;
-                    return numA - numB;
-                });
+                const sortedMos = sortManufacturingOrders(moData as ManufacturingOrder[]);
                 setMos(sortedMos);
             }
             if (opData) setOperations(opData.map((o: any) => o.name));

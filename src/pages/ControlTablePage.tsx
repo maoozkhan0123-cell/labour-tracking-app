@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { sortManufacturingOrders } from '../utils/moSorting';
 
 export const ControlTablePage: React.FC = () => {
     const [tasks, setTasks] = useState<any[]>([]);
@@ -119,7 +120,10 @@ export const ControlTablePage: React.FC = () => {
                 setTasks(richTasks);
                 setEmployees(empData);
             }
-            if (moData) setMos(moData);
+            if (moData) {
+                const sortedMos = sortManufacturingOrders(moData as any[]);
+                setMos(sortedMos);
+            }
             if (opData) setOperations(opData);
 
         } catch (err) {

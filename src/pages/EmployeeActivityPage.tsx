@@ -213,8 +213,8 @@ export const EmployeeActivityPage: React.FC = () => {
                     return (
                         <div key={worker.id} style={{ background: 'white', borderRadius: '12px', border: '1px solid #E2E8F0', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
                             {/* Card Header */}
-                            <div style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isClockedIn ? '#fff' : '#F8FAFC' }}>
-                                <div onClick={() => setExpandedWorkerId(isExpanded ? null : worker.id)} style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', flex: 1 }}>
+                            <div style={{ padding: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', background: isClockedIn ? '#fff' : '#F8FAFC' }}>
+                                <div onClick={() => setExpandedWorkerId(isExpanded ? null : worker.id)} style={{ display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'pointer', flex: 1, minWidth: '200px' }}>
                                     <div style={{
                                         width: '48px', height: '48px', borderRadius: '50%',
                                         background: isClockedIn ? (isOnBreak ? '#F59E0B' : '#10B981') : '#CBD5E1',
@@ -231,7 +231,7 @@ export const EmployeeActivityPage: React.FC = () => {
                                 </div>
 
                                 {/* Controls */}
-                                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                                     {!isClockedIn ? (
                                         <button onClick={() => handleClockIn(worker.id)} className="btn btn-primary" style={{ background: '#0F172A', color: 'white' }}>
                                             Clock In
@@ -268,7 +268,7 @@ export const EmployeeActivityPage: React.FC = () => {
                             {isExpanded && (
                                 <div style={{ padding: '0 1.5rem 1.5rem', borderTop: '1px solid #F1F5F9', animation: 'fadeIn 0.3s' }}>
                                     {/* Stats Row */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginTop: '1.5rem', marginBottom: '2rem' }}>
+                                    <div className="summary-grid">
                                         <SummaryStat label="Shift Duration" value={`${(stats.shift_duration / 3600).toFixed(2)} hrs`} />
                                         <SummaryStat label="Break Duration" value={`${(stats.break_duration / 3600).toFixed(2)} hrs`} />
                                         <SummaryStat label="Task Activity" value={`${(stats.task_duration / 3600).toFixed(2)} hrs`} />

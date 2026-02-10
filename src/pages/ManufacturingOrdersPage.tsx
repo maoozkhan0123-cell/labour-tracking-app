@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import type { ManufacturingOrder } from '../types';
 import { Link } from 'react-router-dom';
+import { sortManufacturingOrders } from '../utils/moSorting';
 
 
 
@@ -39,22 +40,8 @@ export const ManufacturingOrdersPage: React.FC = () => {
                 // Filter out Greenlit orders immediately
                 const activeOnly = (data as ManufacturingOrder[]).filter(o => (o.current_status || '').toLowerCase() !== 'greenlit');
 
-                // Sort: Pinned first, then by sort_order, then numerically by MO Number as fallback
-                const sorted = activeOnly.sort((a, b) => {
-                    // Pin priority
-                    if (a.is_pinned && !b.is_pinned) return -1;
-                    if (!a.is_pinned && b.is_pinned) return 1;
-
-                    // Sort Order priority
-                    if ((a.sort_order || 0) !== (b.sort_order || 0)) {
-                        return (a.sort_order || 0) - (b.sort_order || 0);
-                    }
-
-                    // Fallback MO Number sorting
-                    const numA = parseInt((a.mo_number || '').replace(/\D/g, '')) || 0;
-                    const numB = parseInt((b.mo_number || '').replace(/\D/g, '')) || 0;
-                    return numA - numB;
-                });
+                // Sort using unified utility
+                const sorted = sortManufacturingOrders(activeOnly);
                 setOrders(sorted);
             }
         } catch (error) {
@@ -174,18 +161,8 @@ export const ManufacturingOrdersPage: React.FC = () => {
     const togglePin = async (order: ManufacturingOrder) => {
         const newVal = !order.is_pinned;
         // Optimistic update
-        const updatedOrders = orders.map(o => o.id === order.id ? { ...o, is_pinned: newVal } : o).sort((a, b) => {
-            // Re-sort with new pin state
-            if (a.is_pinned && !b.is_pinned) return -1;
-            if (!a.is_pinned && b.is_pinned) return 1;
-            // Sort Order priority
-            if ((a.sort_order || 0) !== (b.sort_order || 0)) {
-                return (a.sort_order || 0) - (b.sort_order || 0);
-            }
-            const numA = parseInt(a.mo_number.replace(/\D/g, '')) || 0;
-            const numB = parseInt(b.mo_number.replace(/\D/g, '')) || 0;
-            return numA - numB;
-        });
+        // Optimistic update with unified sorting
+        const updatedOrders = sortManufacturingOrders(orders.map(o => o.id === order.id ? { ...o, is_pinned: newVal } : o));
         setOrders(updatedOrders);
 
         try {
