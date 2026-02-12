@@ -1,46 +1,121 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { createClient } from '@supabase/supabase-js'
+
+console.log('[ViteConfig] Loading configuration...');
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load env file based on `mode` in the current working directory.
-  // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
+  console.log('[ViteConfig] Defining config for mode:', mode);
   const env = loadEnv(mode, process.cwd(), '')
-
-  // Populate process.env for the API handler
   process.env = { ...process.env, ...env };
 
   return {
-    plugins: [react()],
-    server: {
-      configureServer(server) {
-        server.middlewares.use('/api/mo-details', async (req: any, res: any, next) => {
-          try {
-            // Polyfill req.query
-            const url = new URL(req.url || '', `http://${req.headers.host}`);
-            req.query = Object.fromEntries(url.searchParams.entries());
+    plugins: [
+      react(),
+      {
+        name: 'mo-details-api',
+        configureServer(server) {
+          console.log('[ViteConfig] Plugin configuring server...');
+          server.middlewares.use('/api/mo-details', async (req: any, res: any) => {
+            console.log('[ViteAPI] Received request for:', req.url);
+            try {
+              const url = new URL(req.url || '', `http://${req.headers.host}`);
+              const eventId = url.searchParams.get('eventId');
 
-            // Polyfill res.status and res.json
-            res.status = (code: number) => {
-              res.statusCode = code;
-              return res;
-            };
-            res.json = (data: any) => {
+              if (!eventId) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ error: 'Missing eventId query parameter' }));
+                return;
+              }
+
+              const supabaseUrl = env.VITE_SUPABASE_URL;
+              const supabaseKey = env.VITE_SUPABASE_ANON_KEY;
+              const supabase = createClient(supabaseUrl, supabaseKey);
+
+              // 1. Fetch MO
+              const { data: mo, error: moError } = await supabase
+                .from('manufacturing_orders')
+                .select('*')
+                .eq('event_id', eventId)
+                .single();
+
+              if (moError || !mo) {
+                res.statusCode = 404;
+                res.end(JSON.stringify({ error: 'MO not found', details: moError?.message }));
+                return;
+              }
+
+              // 2. Fetch Tasks
+              const { data: tasks } = await supabase
+                .from('tasks')
+                .select('*')
+                .eq('mo_reference', mo.mo_number);
+
+              // 3. Fetch Employees
+              const { data: users } = await supabase
+                .from('users')
+                .select('id, name, hourly_rate')
+                .eq('role', 'employee');
+
+              const userMap = new Map();
+              users?.forEach(u => userMap.set(u.id, u));
+
+              // 4. Aggregate
+              let totalSeconds = 0;
+              let totalCost = 0;
+              const uniqueEmployees = new Set<string>();
+
+              const logs = tasks?.map((task: any) => {
+                const worker = userMap.get(task.assigned_to_id) || { name: 'Unknown', hourly_rate: 0 };
+                const durationSec = task.active_seconds || 0;
+                const cost = (durationSec / 3600) * (worker.hourly_rate || 0);
+
+                totalSeconds += durationSec;
+                totalCost += cost;
+                if (worker.name !== 'Unknown') uniqueEmployees.add(worker.name);
+
+                const h = Math.floor(durationSec / 3600);
+                const m = Math.floor((durationSec % 3600) / 60);
+                const s = durationSec % 60;
+
+                return {
+                  worker: worker.name,
+                  operation: task.description,
+                  duration: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`,
+                  cost: parseFloat(cost.toFixed(2)),
+                  status: task.status,
+                  timestamp: task.created_at
+                };
+              }) || [];
+
+              const totalHours = totalSeconds / 3600;
+
               res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify(data));
-              return res;
-            };
+              res.end(JSON.stringify({
+                quantity: mo.quantity,
+                po_number: mo.po_number,
+                product_name: mo.product_name,
+                sku: mo.sku,
+                event_id: mo.event_id,
+                scheduled_date: mo.scheduled_date,
+                current_status: mo.current_status,
+                employee_names: Array.from(uniqueEmployees),
+                total_working_hours: `${totalHours.toFixed(2)}h`,
+                total_cost: parseFloat(totalCost.toFixed(2)),
+                logs_breakdown: logs
+              }));
 
-            // Dynamic import to allow hot-reloading if possible (or just lazy load)
-            const handler = (await import('./api/mo-details.js')).default;
-            await handler(req, res);
-          } catch (error) {
-            console.error('API Middleware Error:', error);
-            res.statusCode = 500;
-            res.end(JSON.stringify({ error: 'Internal Server Error', details: String(error) }));
-          }
-        });
-      },
+            } catch (error: any) {
+              console.error('[ViteAPI] Error:', error);
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: 'Server Error', details: error.message }));
+            }
+          });
+        }
+      }
+    ],
+    server: {
       proxy: {
         '/api/sync-odoo': {
           target: 'https://us-central1-pythonautomation-430712.cloudfunctions.net',
