@@ -74,7 +74,7 @@ export default async function handler(req, res) {
                 worker: worker.name,
                 operation: task.description,
                 duration: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`,
-                cost: parseFloat(cost.toFixed(2)),
+                cost: `${cost.toFixed(2)}$`,
                 status: task.status,
                 timestamp: task.created_at
             };
@@ -92,7 +92,7 @@ export default async function handler(req, res) {
             current_status: mo.current_status,
             employee_names: Array.from(uniqueEmployees),
             total_working_hours: `${totalHours.toFixed(2)}h`,
-            total_cost: parseFloat(totalCost.toFixed(2)),
+            total_cost: `${totalCost.toFixed(2)}$`,
             logs_breakdown: logs
         });
 
