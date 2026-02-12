@@ -15,6 +15,13 @@ export default async function handler(req, res) {
         return;
     }
 
+    const apiKey = req.headers['x-api-key'];
+    const validApiKey = process.env.CUSTOM_API_KEY;
+
+    if (!apiKey || apiKey !== validApiKey) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid or missing API Key' });
+    }
+
     try {
         const supabaseUrl = process.env.VITE_SUPABASE_URL;
         const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;

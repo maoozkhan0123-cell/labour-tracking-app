@@ -19,6 +19,13 @@ export default defineConfig(({ mode }) => {
           console.log('[ViteConfig] Plugin configuring server...');
           server.middlewares.use('/api/mo-details', async (req: any, res: any) => {
             console.log('[ViteAPI] Received request for:', req.url);
+
+            const apiKey = req.headers['x-api-key'];
+            if (!apiKey || apiKey !== env.CUSTOM_API_KEY) {
+              res.statusCode = 401;
+              res.end(JSON.stringify({ error: 'Unauthorized: Invalid or missing API Key' }));
+              return;
+            }
             try {
               const url = new URL(req.url || '', `http://${req.headers.host}`);
               const eventId = url.searchParams.get('eventId');
@@ -113,7 +120,13 @@ export default defineConfig(({ mode }) => {
             }
           });
 
-          server.middlewares.use('/api/completed-orders', async (_req: any, res: any) => {
+          server.middlewares.use('/api/completed-orders', async (req: any, res: any) => {
+            const apiKey = req.headers['x-api-key'];
+            if (!apiKey || apiKey !== env.CUSTOM_API_KEY) {
+              res.statusCode = 401;
+              res.end(JSON.stringify({ error: 'Unauthorized: Invalid or missing API Key' }));
+              return;
+            }
             try {
               const supabaseUrl = env.VITE_SUPABASE_URL;
               const supabaseKey = env.VITE_SUPABASE_ANON_KEY;
