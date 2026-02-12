@@ -112,6 +112,94 @@ export default defineConfig(({ mode }) => {
               res.end(JSON.stringify({ error: 'Server Error', details: error.message }));
             }
           });
+
+          server.middlewares.use('/api/completed-orders', async (_req: any, res: any) => {
+            try {
+              const supabaseUrl = env.VITE_SUPABASE_URL;
+              const supabaseKey = env.VITE_SUPABASE_ANON_KEY;
+              const supabase = createClient(supabaseUrl, supabaseKey);
+
+              const { data: orders, error: ordersError } = await supabase
+                .from('manufacturing_orders')
+                .select('*')
+                .in('current_status', ['Packed', 'Done']);
+
+              if (ordersError) throw ordersError;
+
+              if (!orders || orders.length === 0) {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify([]));
+                return;
+              }
+
+              const moNumbers = orders.map(o => o.mo_number);
+              const { data: allTasks } = await supabase
+                .from('tasks')
+                .select('*')
+                .in('mo_reference', moNumbers);
+
+              const { data: users } = await supabase
+                .from('users')
+                .select('id, name, hourly_rate')
+                .eq('role', 'employee');
+
+              const userMap = new Map();
+              users?.forEach(u => userMap.set(u.id, u));
+
+              const result = orders.map(mo => {
+                const moTasks = allTasks?.filter(t => t.mo_reference === mo.mo_number) || [];
+                let totalSeconds = 0;
+                let totalCost = 0;
+                const uniqueEmployees = new Set();
+
+                const logs = moTasks.map(task => {
+                  const worker = userMap.get(task.assigned_to_id) || { name: 'Unknown', hourly_rate: 0 };
+                  const durationSec = task.active_seconds || 0;
+                  const cost = (durationSec / 3600) * (worker.hourly_rate || 0);
+
+                  totalSeconds += durationSec;
+                  totalCost += cost;
+                  if (worker.name !== 'Unknown') uniqueEmployees.add(worker.name);
+
+                  const h = Math.floor(durationSec / 3600);
+                  const m = Math.floor((durationSec % 3600) / 60);
+                  const s = durationSec % 60;
+
+                  return {
+                    worker: worker.name,
+                    operation: task.description,
+                    duration: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`,
+                    cost: parseFloat(cost.toFixed(2)),
+                    status: task.status,
+                    timestamp: task.created_at
+                  };
+                });
+
+                const totalHours = totalSeconds / 3600;
+
+                return {
+                  quantity: mo.quantity,
+                  po_number: mo.po_number,
+                  product_name: mo.product_name,
+                  sku: mo.sku,
+                  event_id: mo.event_id,
+                  scheduled_date: mo.scheduled_date,
+                  current_status: mo.current_status,
+                  employee_names: Array.from(uniqueEmployees),
+                  total_working_hours: `${totalHours.toFixed(2)}h`,
+                  total_cost: parseFloat(totalCost.toFixed(2)),
+                  logs_breakdown: logs
+                };
+              });
+
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify(result));
+
+            } catch (error: any) {
+              res.statusCode = 500;
+              res.end(JSON.stringify({ error: 'Server Error', details: error.message }));
+            }
+          });
         }
       }
     ],
