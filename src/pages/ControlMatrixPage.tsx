@@ -17,7 +17,6 @@ export const ControlMatrixPage: React.FC = () => {
     const [selectedWorkerId, setSelectedWorkerId] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [showWorkerDropdown, setShowWorkerDropdown] = useState(false);
-    const [manualRate, setManualRate] = useState<number | string>(0);
 
     // Pause Reason Modal State
     const [isPauseModalOpen, setIsPauseModalOpen] = useState(false);
@@ -77,7 +76,6 @@ export const ControlMatrixPage: React.FC = () => {
         setSelectedCell({ mo: moNumber, op: opName, product: productName || 'Unnamed Product' });
         setIsAssignOpen(true);
         // Reset local state
-        setManualRate(''); // Reset to empty
         setSelectedWorkerId('');
         setShowWorkerDropdown(false);
     };
@@ -89,8 +87,6 @@ export const ControlMatrixPage: React.FC = () => {
 
     const handleWorkerSelect = (emp: User) => {
         setSelectedWorkerId(emp.id);
-        const rate = emp.hourly_rate || 0;
-        setManualRate(String(rate)); // Set initial rate as string
         setShowWorkerDropdown(false);
     };
 
@@ -100,7 +96,8 @@ export const ControlMatrixPage: React.FC = () => {
         setIsSaving(true);
         try {
             // Unused 'worker' removed
-            const rate = parseFloat(String(manualRate)) || 0; // Ensure parsing
+            const worker = employees.find(e => e.id === selectedWorkerId);
+            const rate = worker?.hourly_rate || 0;
 
             // Check if active task exists for this worker in this cell
             const existing = tasks.find(t =>
@@ -137,7 +134,6 @@ export const ControlMatrixPage: React.FC = () => {
             setIsSaving(false);
             // Don't close modal to allow assigning more
             setSelectedWorkerId('');
-            setManualRate('');
         }
     };
 
@@ -357,12 +353,6 @@ export const ControlMatrixPage: React.FC = () => {
                                     </div>
                                 )}
                             </div>
-                            <input
-                                type="number"
-                                value={manualRate}
-                                onChange={(e) => setManualRate(e.target.value)}
-                                style={{ width: '120px', height: '48px', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '0 8px', fontSize: '0.95rem' }}
-                            />
                             <button className="btn btn-primary" onClick={assignSingleWorker} disabled={isSaving || !selectedWorkerId} style={{ height: '48px', padding: '0 1.5rem' }}>Assign</button>
                         </div>
                     </div>
@@ -463,7 +453,8 @@ export const ControlMatrixPage: React.FC = () => {
             </div >
 
             {/* Manual Pause Modal */}
-            < div className={`modal-backdrop ${isPauseModalOpen ? 'active' : ''}`} style={{
+            < div className={`modal-backdrop ${isPauseModalOpen ? 'active' : ''}`
+            } style={{
                 position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
                 background: 'rgba(0,0,0,0.5)', zIndex: 3000,
                 display: isPauseModalOpen ? 'flex' : 'none',
