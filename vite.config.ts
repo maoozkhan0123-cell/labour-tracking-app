@@ -90,13 +90,19 @@ export default defineConfig(({ mode }) => {
                   worker: worker.name,
                   operation: task.description,
                   duration: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`,
+                  duration_seconds: durationSec,
+                  hourly_rate: worker.hourly_rate || 0,
                   cost: `${cost.toFixed(2)}$`,
+                  cost_cents: Math.round(cost * 100),
+                  rounding_method: 'standard',
                   status: task.status,
                   timestamp: task.created_at
                 };
               }) || [];
 
-              const totalHours = totalSeconds / 3600;
+              const hTotal = Math.floor(totalSeconds / 3600);
+              const mTotal = Math.floor((totalSeconds % 3600) / 60);
+              const sTotal = totalSeconds % 60;
 
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({
@@ -108,8 +114,10 @@ export default defineConfig(({ mode }) => {
                 scheduled_date: mo.scheduled_date,
                 current_status: mo.current_status,
                 employee_names: Array.from(uniqueEmployees),
-                total_working_hours: `${totalHours.toFixed(2)}h`,
-                total_cost: `${totalCost.toFixed(2)}$`,
+                total_working_hours: `${hTotal.toString().padStart(2, '0')}:${mTotal.toString().padStart(2, '0')}:${sTotal.toString().padStart(2, '0')}`,
+                total_work_seconds: totalSeconds,
+                total_cost: `${Math.round(totalCost)}.00$`,
+                total_cost_cents: Math.round(totalCost * 100),
                 logs_breakdown: logs
               }));
 
@@ -182,13 +190,19 @@ export default defineConfig(({ mode }) => {
                     worker: worker.name,
                     operation: task.description,
                     duration: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`,
+                    duration_seconds: durationSec,
+                    hourly_rate: worker.hourly_rate || 0,
                     cost: `${cost.toFixed(2)}$`,
+                    cost_cents: Math.round(cost * 100),
+                    rounding_method: 'standard',
                     status: task.status,
                     timestamp: task.created_at
                   };
                 });
 
-                const totalHours = totalSeconds / 3600;
+                const hTotal = Math.floor(totalSeconds / 3600);
+                const mTotal = Math.floor((totalSeconds % 3600) / 60);
+                const sTotal = totalSeconds % 60;
 
                 return {
                   quantity: mo.quantity,
@@ -199,8 +213,10 @@ export default defineConfig(({ mode }) => {
                   scheduled_date: mo.scheduled_date,
                   current_status: mo.current_status,
                   employee_names: Array.from(uniqueEmployees),
-                  total_working_hours: `${totalHours.toFixed(2)}h`,
-                  total_cost: `${totalCost.toFixed(2)}$`,
+                  total_working_hours: `${hTotal.toString().padStart(2, '0')}:${mTotal.toString().padStart(2, '0')}:${sTotal.toString().padStart(2, '0')}`,
+                  total_work_seconds: totalSeconds,
+                  total_cost: `${Math.round(totalCost)}.00$`,
+                  total_cost_cents: Math.round(totalCost * 100),
                   logs_breakdown: logs
                 };
               });
