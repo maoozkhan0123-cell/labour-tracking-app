@@ -67,7 +67,9 @@ export default async function handler(req, res) {
         const logs = tasks?.map((task) => {
             const worker = userMap.get(task.assigned_to_id) || { name: 'Unknown', hourly_rate: 0 };
             const durationSec = task.active_seconds || 0;
-            const cost = (durationSec / 3600) * (worker.hourly_rate || 0);
+            // Use task-level hourly rate if available, fallback to worker default
+            const rate = task.hourly_rate || worker.hourly_rate || 0;
+            const cost = (durationSec / 3600) * rate;
 
             totalSeconds += durationSec;
             totalCost += cost;
@@ -82,7 +84,7 @@ export default async function handler(req, res) {
                 operation: task.description,
                 duration: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`,
                 duration_seconds: durationSec,
-                hourly_rate: worker.hourly_rate || 0,
+                hourly_rate: rate,
                 cost: `${cost.toFixed(2)}$`,
                 cost_cents: Math.round(cost * 100),
                 rounding_method: 'standard',

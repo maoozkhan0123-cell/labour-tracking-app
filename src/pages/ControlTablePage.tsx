@@ -26,7 +26,8 @@ export const ControlTablePage: React.FC = () => {
         last_action_time: '',
         status: '',
         active_hours: 0,
-        active_minutes: 0
+        active_minutes: 0,
+        hourly_rate: 0
     });
 
     // Create Modal State
@@ -41,7 +42,8 @@ export const ControlTablePage: React.FC = () => {
         last_action_time: '',
         status: 'pending',
         active_hours: 0,
-        active_minutes: 0
+        active_minutes: 0,
+        hourly_rate: 0
     });
 
     const [activeChip, setActiveChip] = useState('Today'); // Move useState to top level
@@ -103,6 +105,16 @@ export const ControlTablePage: React.FC = () => {
             }
         }
     }, [editForm.start_time, editForm.end_time, editForm.last_action_time]);
+
+    // Sync hourly rate when worker is selected in create modal
+    useEffect(() => {
+        if (createForm.worker_id) {
+            const emp = employees.find(e => e.id === createForm.worker_id);
+            if (emp) {
+                setCreateForm(prev => ({ ...prev, hourly_rate: emp.hourly_rate || 0 }));
+            }
+        }
+    }, [createForm.worker_id, employees]);
 
 
     const fetchData = async () => {
@@ -184,7 +196,8 @@ export const ControlTablePage: React.FC = () => {
             last_action_time: task.last_action_time ? task.last_action_time.substring(0, 16) : '',
             status: task.status,
             active_hours: h,
-            active_minutes: m
+            active_minutes: m,
+            hourly_rate: task.hourly_rate || 0
         });
         setIsEditOpen(true);
     };
@@ -226,6 +239,7 @@ export const ControlTablePage: React.FC = () => {
             created_at: editForm.created_at ? new Date(editForm.created_at).toISOString() : editingTask.created_at,
             start_time: editForm.start_time ? new Date(editForm.start_time).toISOString() : null,
             last_action_time: editForm.last_action_time ? new Date(editForm.last_action_time).toISOString() : editingTask.last_action_time,
+            hourly_rate: editForm.hourly_rate,
         };
 
         // If end_time is provided, force status to completed so it saves correctly
@@ -270,7 +284,8 @@ export const ControlTablePage: React.FC = () => {
             last_action_time: '',
             status: 'pending',
             active_hours: 0,
-            active_minutes: 0
+            active_minutes: 0,
+            hourly_rate: 0
         });
         setIsCreateOpen(true);
     };
@@ -314,8 +329,9 @@ export const ControlTablePage: React.FC = () => {
             created_at: createForm.created_at ? new Date(createForm.created_at).toISOString() : new Date().toISOString(),
             start_time: createForm.start_time ? new Date(createForm.start_time).toISOString() : null,
             last_action_time: createForm.last_action_time ? new Date(createForm.last_action_time).toISOString() : null,
-            hourly_rate: emp?.hourly_rate || 0,
-            break_seconds: 0
+            hourly_rate: createForm.hourly_rate,
+            break_seconds: 0,
+            manual: true
         };
 
         if (createForm.end_time) {
@@ -682,19 +698,31 @@ export const ControlTablePage: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div>
-                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Status</label>
-                                <select
-                                    value={editForm.status}
-                                    onChange={e => setEditForm(prev => ({ ...prev, status: e.target.value }))}
-                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
-                                >
-                                    <option value="pending">Pending</option>
-                                    <option value="clocked_in">Clocked In</option>
-                                    <option value="active">Timer Running</option>
-                                    <option value="break">On Break</option>
-                                    <option value="completed">Completed</option>
-                                </select>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Hourly Rate ($)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={editForm.hourly_rate}
+                                        onChange={e => setEditForm(prev => ({ ...prev, hourly_rate: parseFloat(e.target.value) || 0 }))}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Status</label>
+                                    <select
+                                        value={editForm.status}
+                                        onChange={e => setEditForm(prev => ({ ...prev, status: e.target.value }))}
+                                        style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
+                                    >
+                                        <option value="pending">Pending</option>
+                                        <option value="clocked_in">Clocked In</option>
+                                        <option value="active">Timer Running</option>
+                                        <option value="break">On Break</option>
+                                        <option value="completed">Completed</option>
+                                    </select>
+                                </div>
                             </div>
 
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
@@ -754,8 +782,8 @@ export const ControlTablePage: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Row 2: Operation & Status */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        {/* Row 2: Operation, Status & Rate */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
                             <div>
                                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Operation</label>
                                 <select
@@ -782,6 +810,16 @@ export const ControlTablePage: React.FC = () => {
                                     <option value="break">On Break</option>
                                     <option value="completed">Completed</option>
                                 </select>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.4rem', color: '#475569', fontSize: '0.85rem' }}>Hourly Rate ($)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={createForm.hourly_rate}
+                                    onChange={e => setCreateForm(prev => ({ ...prev, hourly_rate: parseFloat(e.target.value) || 0 }))}
+                                    style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1.5px solid var(--border)', fontSize: '0.9rem' }}
+                                />
                             </div>
                         </div>
 
