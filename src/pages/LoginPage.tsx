@@ -22,7 +22,8 @@ export const LoginPage: React.FC = () => {
 
     return (
         <div className="login-body-wrapper">
-            <style dangerouslySetInnerHTML={{ __html: `
+            <style dangerouslySetInnerHTML={{
+                __html: `
                 :root {
                     --babylon-navy: #262661;
                     --babylon-gold: #EDAD2F;
@@ -182,7 +183,7 @@ export const LoginPage: React.FC = () => {
                 <form onSubmit={handleSubmit} className="login-form">
                     <h2
                         style={{ fontSize: '0.85rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2rem', textAlign: 'center' }}>
-                        Administrator Login</h2>
+                        System Login</h2>
 
                     <div className="input-group">
                         <input type="text" name="username" required placeholder="Username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />

@@ -10,6 +10,7 @@ import { ControlMatrixPage } from './pages/ControlMatrixPage';
 import { ControlTablePage } from './pages/ControlTablePage';
 import { EmployeeActivityPage } from './pages/EmployeeActivityPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { WorkerPortalPage } from './pages/WorkerPortalPage';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/worker-portal" element={<WorkerPortalPage />} />
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
             <Route path="control-matrix" element={<ControlMatrixPage />} />

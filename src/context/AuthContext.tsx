@@ -35,8 +35,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return false;
         }
 
-        if ((data as any).role !== 'manager') {
-            alert('Access denied. Administrator privileges required.');
+        if ((data as any).role !== 'manager' && (data as any).role !== 'employee') {
+            alert('Access denied. Invalid user role.');
             return false;
         }
 

@@ -11,6 +11,9 @@ export const Layout: React.FC = () => {
     if (loading) return <div className="loading-screen">Authenticating...</div>;
     if (!user) return <Navigate to="/login" replace />;
 
+    // Redirect employees away from manager area
+    if (user.role === 'employee') return <Navigate to="/worker-portal" replace />;
+
     return (
         <div className="app-container">
             {isMobileOpen && (

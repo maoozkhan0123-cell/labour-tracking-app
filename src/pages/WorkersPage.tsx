@@ -10,7 +10,9 @@ export const WorkersPage: React.FC = () => {
 
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [selectedWorker, setSelectedWorker] = useState<any>(null);
+    const [rateHistory, setRateHistory] = useState<any[]>([]);
     const [formData, setFormData] = useState({ worker_id: '', name: '', username: '', rate: '', password: '', active: true });
 
     useEffect(() => { fetchWorkers(); }, []);
@@ -66,6 +68,16 @@ export const WorkersPage: React.FC = () => {
         });
 
         if (!error) {
+            // Record initial rate in history
+            const { data: newUser }: any = await supabase.from('users').select('id').eq('username', formData.username).single();
+            if (newUser) {
+                await (supabase.from('worker_rate_history') as any).insert({
+                    user_id: newUser.id,
+                    worker_name: formData.name,
+                    hourly_rate: parseFloat(formData.rate)
+                });
+            }
+
             setIsAddOpen(false);
             resetForm();
             fetchWorkers();
@@ -82,7 +94,17 @@ export const WorkersPage: React.FC = () => {
             worker_id: formData.worker_id,
             hourly_rate: parseFloat(formData.rate)
         }).eq('id', selectedWorker.id);
+
         if (!error) {
+            // Check if rate changed and record in history
+            if (parseFloat(formData.rate) !== parseFloat(selectedWorker.hourly_rate)) {
+                await (supabase.from('worker_rate_history') as any).insert({
+                    user_id: selectedWorker.id,
+                    worker_name: formData.name,
+                    hourly_rate: parseFloat(formData.rate)
+                });
+            }
+
             setIsEditOpen(false);
             resetForm();
             fetchWorkers();
@@ -113,6 +135,19 @@ export const WorkersPage: React.FC = () => {
             active: worker.active !== false
         });
         setIsEditOpen(true);
+    };
+
+    const openHistory = async (worker: any) => {
+        setSelectedWorker(worker);
+        setIsHistoryOpen(true);
+        const { data, error } = await supabase
+            .from('worker_rate_history')
+            .select('*')
+            .eq('user_id', worker.id)
+            .order('changed_at', { ascending: false });
+
+        if (data) setRateHistory(data);
+        else if (error) console.error('Error fetching history:', error);
     };
 
     const filteredWorkers = workers.filter(w => {
@@ -207,6 +242,9 @@ export const WorkersPage: React.FC = () => {
                                     }
                                 </td>
                                 <td style={{ textAlign: 'right' }}>
+                                    <button className="icon-btn" title="View Rate History" onClick={() => openHistory(worker)} style={{ color: '#6366F1', marginRight: '5px' }}>
+                                        <i className="fa-solid fa-clock-rotate-left"></i>
+                                    </button>
                                     <button className="icon-btn" title="Edit" onClick={() => openEdit(worker)}><i className="fa-solid fa-pen"></i></button>
                                     <button
                                         className="icon-btn delete"
@@ -291,7 +329,40 @@ export const WorkersPage: React.FC = () => {
                 </div>
             </div>
 
-            {(isAddOpen || isEditOpen) && <div className="overlay active" onClick={() => { setIsAddOpen(false); setIsEditOpen(false); }}></div>}
+            {/* History Modal */}
+            <div className={`custom-modal ${isHistoryOpen ? 'active' : ''}`} style={{ width: '500px', padding: 0, borderRadius: '16px', overflow: 'hidden', background: 'white' }}>
+                <div style={{ padding: '1.5rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #F1F5F9' }}>
+                    <div>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Rate History</h3>
+                        <p style={{ fontSize: '0.85rem', color: '#64748B', margin: 0 }}>{selectedWorker?.name}</p>
+                    </div>
+                    <button onClick={() => setIsHistoryOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.25rem', color: '#666', cursor: 'pointer' }}><i className="fa-solid fa-xmark"></i></button>
+                </div>
+                <div style={{ padding: '2rem', maxHeight: '400px', overflowY: 'auto' }}>
+                    {rateHistory.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {rateHistory.map((h, i) => (
+                                <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: i === 0 ? '#F0F9FF' : '#F8FAFC', borderRadius: '12px', border: i === 0 ? '1px solid #BAE6FD' : '1px solid #E2E8F0' }}>
+                                    <div>
+                                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0F172A' }}>$ {parseFloat(h.hourly_rate).toFixed(2)}/hr</div>
+                                        <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '0.2rem' }}>
+                                            Effective since: {new Date(h.changed_at).toLocaleDateString()} {new Date(h.changed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                    </div>
+                                    {i === 0 && <span style={{ fontSize: '0.7rem', background: '#0EA5E9', color: 'white', padding: '0.2rem 0.5rem', borderRadius: '4px', fontWeight: 700 }}>CURRENT</span>}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8' }}>No history records found.</div>
+                    )}
+                </div>
+                <div style={{ padding: '1.5rem 2rem', background: '#F8FAFC', textAlign: 'right' }}>
+                    <button className="btn" onClick={() => setIsHistoryOpen(false)} style={{ width: 'auto', padding: '0.6rem 1.5rem', borderRadius: '8px', border: '1.5px solid #DDD', background: 'white', fontWeight: 600 }}>Close</button>
+                </div>
+            </div>
+
+            {(isAddOpen || isEditOpen || isHistoryOpen) && <div className="overlay active" onClick={() => { setIsAddOpen(false); setIsEditOpen(false); setIsHistoryOpen(false); }}></div>}
         </>
     );
 };
