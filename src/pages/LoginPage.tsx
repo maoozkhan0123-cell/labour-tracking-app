@@ -5,18 +5,42 @@ import { Navigate } from 'react-router-dom';
 export const LoginPage: React.FC = () => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [loginRole, setLoginRole] = useState<'admin' | 'worker'>('worker');
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const { login, user } = useAuth();
 
-    if (user) return <Navigate to="/" replace />;
+    if (user) {
+        if (user.role === 'manager') return <Navigate to="/" replace />;
+        return <Navigate to="/worker-portal" replace />;
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+
+        // We need to check role before setting the user in context if possible, 
+        // but current AuthContext.login just sets it. 
+        // We'll handle it here by logging out if the role is wrong.
         const success = await login(username, password);
+
         if (!success) {
             setError('Invalid username or password');
+            return;
+        }
+
+        // Check if role matches selected portal
+        const savedUser = JSON.parse(localStorage.getItem('bt_user') || '{}');
+        const userRole = savedUser.role;
+
+        if (loginRole === 'admin' && userRole !== 'manager') {
+            setError('Access Denied: Restricted Portal - This account is not authorized for Admin Access');
+            localStorage.removeItem('bt_user');
+            setTimeout(() => window.location.reload(), 1500);
+        } else if (loginRole === 'worker' && userRole !== 'employee') {
+            setError('Access Denied: Restricted Portal - This account is not authorized for Worker Access');
+            localStorage.removeItem('bt_user');
+            setTimeout(() => window.location.reload(), 1500);
         }
     };
 
@@ -25,12 +49,13 @@ export const LoginPage: React.FC = () => {
             <style dangerouslySetInnerHTML={{
                 __html: `
                 :root {
-                    --babylon-navy: #262661;
+                    --babylon-navy: #1E293B;
                     --babylon-gold: #EDAD2F;
+                    --primary: #2563EB;
                 }
 
                 .login-body-wrapper {
-                    background-color: #ffffff;
+                    background-color: #f8fafc;
                     margin: 0;
                     padding: 0;
                     height: 100vh;
@@ -38,9 +63,9 @@ export const LoginPage: React.FC = () => {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    font-family: 'Poppins', sans-serif;
+                    font-family: 'Inter', sans-serif;
                     color: var(--babylon-navy);
-                    overflow-y: auto;
+                    overflow: hidden;
                     position: fixed;
                     top: 0;
                     left: 0;
@@ -49,28 +74,64 @@ export const LoginPage: React.FC = () => {
 
                 .login-card {
                     width: 100%;
-                    max-width: 400px;
-                    padding: 2rem;
+                    max-width: 440px;
+                    padding: 3rem 2.5rem;
+                    background: white;
+                    border-radius: 24px;
+                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
                     text-align: center;
+                    border: 1px solid #e2e8f0;
                 }
 
                 .logo-container {
                     margin-bottom: 2rem;
+                    display: flex;
+                    justify-content: center;
                 }
 
                 .logo-container img {
                     width: 140px;
                     height: auto;
-                    object-fit: contain;
                 }
 
                 .login-heading {
                     font-size: 1.5rem;
-                    font-weight: 700;
-                    margin-bottom: 2rem;
-                    color: var(--babylon-navy);
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
+                    font-weight: 800;
+                    margin-bottom: 0.5rem;
+                    color: #0f172a;
+                }
+
+                .login-subheading {
+                    font-size: 0.9rem;
+                    color: #64748b;
+                    margin-bottom: 2.5rem;
+                }
+
+                .role-toggle {
+                    display: flex;
+                    background: #f1f5f9;
+                    padding: 0.25rem;
+                    border-radius: 12px;
+                    margin-bottom: 2.5rem;
+                }
+
+                .role-btn {
+                    flex: 1;
+                    padding: 0.75rem;
+                    border: none;
+                    background: transparent;
+                    font-size: 0.875rem;
+                    font-weight: 600;
+                    color: #64748b;
+                    cursor: pointer;
+                    border-radius: 10px;
+                    transition: all 0.2s;
+                }
+
+                .role-btn.active {
+                    background: white;
+                    color: #0f172a;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
                 }
 
                 .login-form {
@@ -78,97 +139,82 @@ export const LoginPage: React.FC = () => {
                 }
 
                 .input-group {
-                    margin-bottom: 1.2rem;
+                    margin-bottom: 1.5rem;
                     position: relative;
+                }
+
+                .input-group label {
+                    display: block;
+                    font-size: 0.875rem;
+                    font-weight: 500;
+                    color: #334155;
+                    margin-bottom: 0.5rem;
                 }
 
                 .input-group input {
                     width: 100%;
-                    background: #fdfdfd;
-                    border: 1px solid #eeeeee;
+                    background: white;
+                    border: 1px solid #cbd5e1;
                     border-radius: 12px;
-                    padding: 0.9rem 1.2rem;
-                    color: var(--babylon-navy);
-                    font-size: 0.9rem;
+                    padding: 0.75rem 1rem;
+                    color: #0f172a;
+                    font-size: 1rem;
                     outline: none;
-                    transition: all 0.3s ease;
+                    transition: border-color 0.2s;
                     box-sizing: border-box;
                 }
 
                 .input-group input:focus {
-                    border-color: var(--babylon-gold);
-                    background: white;
-                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+                    border-color: var(--primary);
+                    ring: 2px solid var(--primary);
                 }
 
                 .password-toggle {
                     position: absolute;
-                    right: 1.2rem;
-                    top: 50%;
-                    transform: translateY(-50%);
+                    right: 1rem;
+                    top: 2.4rem;
                     cursor: pointer;
-                    font-size: 1.1rem;
-                    color: var(--babylon-gold);
-                    opacity: 0.8;
-                    transition: all 0.3s;
-                    display: flex;
-                    align-items: center;
-                }
-
-                .password-toggle:hover {
-                    opacity: 1;
-                    transform: translateY(-50%) scale(1.1);
+                    color: #64748b;
                 }
 
                 .forgot-password {
                     display: block;
                     text-align: right;
-                    font-size: 0.75rem;
-                    color: #7f8c8d;
+                    font-size: 0.875rem;
+                    color: var(--primary);
                     text-decoration: none;
-                    margin-top: -0.8rem;
-                    margin-bottom: 1.5rem;
-                    font-weight: 500;
-                    transition: color 0.3s;
-                }
-
-                .forgot-password:hover {
-                    color: var(--babylon-gold);
+                    margin-top: -1rem;
+                    margin-bottom: 2rem;
                 }
 
                 .submit-btn {
                     width: 100%;
-                    background: var(--babylon-navy);
+                    background: #0f172a;
                     border: none;
                     border-radius: 12px;
-                    padding: 1rem;
+                    padding: 0.875rem;
                     color: white;
-                    font-size: 0.95rem;
+                    font-size: 1rem;
                     font-weight: 600;
-                    text-transform: uppercase;
-                    letter-spacing: 1.5px;
                     cursor: pointer;
-                    transition: all 0.3s;
-                    margin-top: 0.5rem;
-                    box-shadow: 0 10px 20px rgba(27, 27, 75, 0.15);
+                    transition: background 0.2s;
                 }
 
                 .submit-btn:hover {
-                    background: var(--babylon-gold);
-                    color: var(--babylon-navy);
-                    transform: translateY(-2px);
-                    box-shadow: 0 15px 30px rgba(237, 173, 47, 0.25);
+                    background: #1e293b;
                 }
 
                 .error-message {
-                    background: #fff5f5;
-                    color: #d63031;
-                    padding: 0.8rem 1rem;
-                    border-radius: 10px;
-                    font-size: 0.8rem;
-                    border: 1px solid #feb2b2;
+                    background: #fef2f2;
+                    color: #991b1b;
+                    padding: 0.75rem 1rem;
+                    border-radius: 12px;
+                    font-size: 0.875rem;
+                    border: 1px solid #fee2e2;
                     margin-bottom: 1.5rem;
-                    text-align: center;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
                 }
             ` }} />
             <div className="login-card">
@@ -176,29 +222,64 @@ export const LoginPage: React.FC = () => {
                     <img src="/babylon.svg" alt="Babylon Logo" />
                 </div>
 
-                <h1 className="login-heading">Babylon</h1>
+                <h1 className="login-heading">Welcome Back</h1>
+                <p className="login-subheading">Please enter your credentials to continue</p>
 
-                {error && <div className="error-message">{error}</div>}
+                <div className="role-toggle">
+                    <button
+                        className={`role-btn ${loginRole === 'worker' ? 'active' : ''}`}
+                        onClick={() => setLoginRole('worker')}
+                    >
+                        Worker
+                    </button>
+                    <button
+                        className={`role-btn ${loginRole === 'admin' ? 'active' : ''}`}
+                        onClick={() => setLoginRole('admin')}
+                    >
+                        Admin
+                    </button>
+                </div>
+
+                {error && (
+                    <div className="error-message">
+                        <i className="fa-solid fa-triangle-exclamation"></i>
+                        {error}
+                    </div>
+                )}
 
                 <form onSubmit={handleSubmit} className="login-form">
-                    <h2
-                        style={{ fontSize: '0.85rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2rem', textAlign: 'center' }}>
-                        System Login</h2>
-
                     <div className="input-group">
-                        <input type="text" name="username" required placeholder="Username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+                        <label>Username</label>
+                        <input
+                            type="text"
+                            name="username"
+                            required
+                            placeholder="Enter username"
+                            autoComplete="username"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                        />
                     </div>
                     <div className="input-group">
-                        <input type={showPassword ? "text" : "password"} name="password" required placeholder="Password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                        <label>Password</label>
+                        <input
+                            type={showPassword ? "text" : "password"}
+                            name="password"
+                            required
+                            placeholder="••••••••"
+                            autoComplete="current-password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                        />
                         <span className="password-toggle" onClick={() => setShowPassword(!showPassword)}>
                             <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                         </span>
                     </div>
 
-                    <a href="#" className="forgot-password">Forgot Password?</a>
+                    <a href="#" className="forgot-password">Forgot password?</a>
 
-                    <button type="submit" className="submit-btn" style={{ borderRadius: '99px' }}>
-                        Login
+                    <button type="submit" className="submit-btn">
+                        Sign In
                     </button>
                 </form>
             </div>

@@ -75,6 +75,11 @@ export const Sidebar: React.FC<{
                         <i className="fa-solid fa-chart-column"></i> <span>Reports</span>
                     </NavLink>
                 </li>
+                <li>
+                    <NavLink to="/discipline" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={handleMobileClose}>
+                        <i className="fa-solid fa-gavel"></i> <span>Discipline</span>
+                    </NavLink>
+                </li>
             </ul>
 
             <div className="bottom-menu">

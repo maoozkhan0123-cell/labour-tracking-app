@@ -9,6 +9,60 @@ export interface User {
     status?: 'offline' | 'present'; // Clocked status
     availability?: 'available' | 'break'; // Break status
     last_status_change?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+}
+
+export interface DisciplinaryPolicy {
+    id: string;
+    title: string;
+    content: string;
+    version: string;
+    effective_date: string;
+    is_active: boolean;
+    created_at: string;
+    document_number: string;
+}
+
+export interface DisciplinaryIncident {
+    id: string;
+    worker_id: string;
+    reported_by: string;
+    incident_date: string;
+    category: string;
+    severity: 'minor' | 'major' | 'gross_misconduct';
+    description: string;
+    documentation?: string;
+    attachment_url?: string;
+    worker_explanation?: string;
+    worker_signature?: string;
+    signed_at?: string;
+    status: string;
+    created_at: string;
+}
+
+export interface DisciplinaryAction {
+    id: string;
+    worker_id: string;
+    incident_id: string;
+    action_step: 'verbal_warning' | 'written_warning' | 'suspension' | 'termination';
+    is_override: boolean;
+    override_reason?: string;
+    executive_approval_id?: string;
+    issued_date: string;
+    expiry_date?: string;
+    status: string;
+    created_at: string;
+}
+
+export interface PolicyAcknowledgment {
+    id: string;
+    policy_id: string;
+    worker_id: string;
+    signed_at: string;
+    signature_data: string;
+    ip_address?: string;
 }
 
 export interface ActivityLog {

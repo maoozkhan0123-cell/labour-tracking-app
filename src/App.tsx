@@ -11,6 +11,7 @@ import { ControlTablePage } from './pages/ControlTablePage';
 import { EmployeeActivityPage } from './pages/EmployeeActivityPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { WorkerPortalPage } from './pages/WorkerPortalPage';
+import { DisciplineAdminPage } from './pages/DisciplineAdminPage';
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             <Route path="workers" element={<WorkersPage />} />
             <Route path="operations" element={<OperationsPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="discipline" element={<DisciplineAdminPage />} />
           </Route>
         </Routes>
       </Router>

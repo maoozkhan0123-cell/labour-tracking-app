@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { Operation, Task, User, ManufacturingOrder } from '../types';
+import type { Operation, Task, User, ManufacturingOrder, DisciplinaryPolicy, DisciplinaryIncident, DisciplinaryAction, PolicyAcknowledgment } from '../types';
 
 export interface Database {
   public: {
@@ -20,9 +20,34 @@ export interface Database {
         Update: Partial<Omit<ManufacturingOrder, 'id' | 'created_at'>>;
       };
       operations: {
-        Row: Operation;
-        Insert: Omit<Operation, 'id'>;
-        Update: Partial<Omit<Operation, 'id'>>;
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
+      disciplinary_policies: {
+        Row: DisciplinaryPolicy;
+        Insert: Omit<DisciplinaryPolicy, 'id' | 'created_at'>;
+        Update: Partial<Omit<DisciplinaryPolicy, 'id' | 'created_at'>>;
+      };
+      disciplinary_incidents: {
+        Row: DisciplinaryIncident;
+        Insert: Omit<DisciplinaryIncident, 'id' | 'created_at'> & { documentation?: string; attachment_url?: string };
+        Update: Partial<Omit<DisciplinaryIncident, 'id' | 'created_at'>> & { documentation?: string; attachment_url?: string };
+      };
+      disciplinary_actions: {
+        Row: DisciplinaryAction;
+        Insert: Omit<DisciplinaryAction, 'id' | 'created_at'>;
+        Update: Partial<Omit<DisciplinaryAction, 'id' | 'created_at'>>;
+      };
+      policy_acknowledgments: {
+        Row: PolicyAcknowledgment;
+        Insert: Omit<PolicyAcknowledgment, 'id'>;
+        Update: Partial<Omit<PolicyAcknowledgment, 'id'>>;
+      };
+      appeal_cases: {
+        Row: any; // Keeping any for appeal cases until the interface is more certain
+        Insert: any;
+        Update: any;
       };
     };
   };
