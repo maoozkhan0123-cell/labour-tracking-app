@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { Operation, Task, User, ManufacturingOrder, DisciplinaryPolicy, DisciplinaryIncident, DisciplinaryAction, PolicyAcknowledgment } from '../types';
+import type { Task, User, ManufacturingOrder, DisciplinaryPolicy, DisciplinaryIncident, DisciplinaryAction, PolicyAcknowledgment } from '../types';
 
 export interface Database {
   public: {

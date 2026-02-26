@@ -17,13 +17,13 @@ export const DisciplinaryService = {
         if (currentSeverity === 'major') return 'suspension';
 
         // Fetch active warnings for minor/major issues
-        const { data: previousActions } = await supabase
+        const { data: previousActions } = await (supabase as any)
             .from('disciplinary_actions')
             .select('action_step')
             .eq('worker_id', workerId)
             .eq('status', 'active');
 
-        const steps = previousActions?.map(a => a.action_step) || [];
+        const steps = previousActions?.map((a: any) => a.action_step) || [];
 
         if (currentSeverity === 'minor') {
             if (steps.includes('written_warning')) return 'suspension';
@@ -52,7 +52,7 @@ export const DisciplinaryService = {
      * Records a worker's acknowledgment of a policy
      */
     async acknowledgePolicy(workerId: string, policyId: string, signature: string) {
-        return await supabase
+        return await (supabase as any)
             .from('policy_acknowledgments')
             .insert({
                 worker_id: workerId,
@@ -67,17 +67,17 @@ export const DisciplinaryService = {
      */
     async getPendingAcknowledgments(workerId: string) {
         // Standard query to find policies without acknowledgments
-        const { data: policies } = await supabase
+        const { data: policies } = await (supabase as any)
             .from('disciplinary_policies')
             .select('*')
             .eq('is_active', true);
 
-        const { data: acks } = await supabase
+        const { data: acks } = await (supabase as any)
             .from('policy_acknowledgments')
             .select('policy_id')
             .eq('worker_id', workerId);
 
-        const acknowledgedIds = acks?.map(a => a.policy_id) || [];
-        return policies?.filter(p => !acknowledgedIds.includes(p.id)) || [];
+        const acknowledgedIds = acks?.map((a: any) => a.policy_id) || [];
+        return policies?.filter((p: any) => !acknowledgedIds.includes(p.id)) || [];
     }
 };
