@@ -23,14 +23,14 @@ export const Sidebar: React.FC<{
     return (
         <nav className={`sidebar ${isCollapsed ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}>
             <div className="brand">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <div className="brand-icon">
-                        <img src="/babylon.svg" alt="Logo" style={{ width: '20px', height: '20px', objectFit: 'contain' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem' }}>
+                    <div className="brand-icon" style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)' }}>
+                        <span style={{ color: 'white', fontWeight: 900 }}>B</span>
                     </div>
-                    <span>BabylonLLC</span>
+                    <span style={{ letterSpacing: '-0.03em', fontSize: '1.4rem', fontWeight: 900, color: 'white' }}>Babylon</span>
                 </div>
                 <button className="sidebar-toggle" onClick={toggleSidebar}>
-                    <i className={`fa-solid ${isCollapsed ? 'fa-bars' : 'fa-xmark'}`}></i>
+                    <i className={`fa-solid ${isCollapsed ? 'fa-bars-staggered' : 'fa-chevron-left'}`}></i>
                 </button>
             </div>
 

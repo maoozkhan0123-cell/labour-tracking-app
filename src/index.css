@@ -1,30 +1,38 @@
 :root {
-    --primary: #262661;
-    --primary-hover: #1e1e4a;
-    --accent: #EDAD2F;
-    --accent-hover: #d69c2a;
-    --secondary: #64748B;
-    --success: #10B981;
-    --warning: #F59E0B;
-    --danger: #EF4444;
-    --bg-body: #F4F7FE;
-    --bg-card: #FFFFFF;
-    --text-main: #1b1b4b;
-    --text-muted: #64748B;
-    --border: #E2E8F0;
+    /* Premium Palette */
+    --primary: #1e1b4b;
+    /* Deep Indigo */
+    --primary-light: #312e81;
+    --accent: #f59e0b;
+    /* Vibrant Amber/Gold */
+    --accent-light: #fbbf24;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --bg-body: #f8fafc;
+    --bg-card: #ffffff;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --border: #e2e8f0;
+
+    /* Dynamic Spacing */
     --sidebar-width: 260px;
     --sidebar-collapsed-width: 80px;
-    --header-height: 64px;
+    --header-height: 72px;
+
+    /* Layered Shadows for Premium Feel */
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-    --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04);
+    --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+    --shadow-md: 0 10px 15px -3px rgb(0 0 0 / 0.06), 0 4px 6px -4px rgb(0 0 0 / 0.06);
+    --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.08);
+    --shadow-xl: 0 25px 50px -12px rgb(0 0 0 / 0.12);
 }
 
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Inter', 'Poppins', sans-serif;
+    font-family: 'Outfit', 'Inter', -apple-system, sans-serif;
 }
 
 body {
@@ -147,8 +155,9 @@ body {
 .main-content {
     margin-left: var(--sidebar-width);
     flex: 1;
-    padding: 2rem;
+    padding: 2.5rem 3.5rem;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 0;
 }
 
 .main-content.expanded {

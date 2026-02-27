@@ -15,6 +15,9 @@ export const WorkerPortalPage: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'personal_info' | 'conduct' | 'settings' | 'documentation'>('dashboard');
     const [signingData, setSigningData] = useState<{ [key: string]: { explanation: string, signature: string } }>({});
     const [nfcStatus, setNfcStatus] = useState<'idle' | 'listening' | 'reading' | 'error'>('idle');
+    const [pendingPolicies, setPendingPolicies] = useState<any[]>([]);
+    const [policySignature, setPolicySignature] = useState('');
+    const [isSigningPolicy, setIsSigningPolicy] = useState(false);
 
     const handleSignIncident = async (incidentId: string) => {
         const data = signingData[incidentId];
@@ -115,6 +118,7 @@ export const WorkerPortalPage: React.FC = () => {
             fetchUserStatus();
             fetchActiveTasks();
             fetchDisciplinaryIncidents();
+            fetchPendingPolicies();
 
             // Initialize NFC Listening
             if ('NDEFReader' in window) {
@@ -159,6 +163,21 @@ export const WorkerPortalPage: React.FC = () => {
         }
     }, [user]);
 
+    useEffect(() => {
+        // Test notification on load to verify UI component
+        if (user) {
+            const testTimer = setTimeout(() => {
+                setNotification({
+                    show: true,
+                    message: "Bablyon Portal: Security and incident monitoring is active.",
+                    severity: 'success'
+                });
+                setTimeout(() => setNotification(null), 5000);
+            }, 1500);
+            return () => clearTimeout(testTimer);
+        }
+    }, [user]);
+
     const fetchUserStatus = async () => {
         if (!user) return;
         const { data } = await supabase.from('users').select('*').eq('id', user.id).single();
@@ -185,14 +204,135 @@ export const WorkerPortalPage: React.FC = () => {
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            if (data) setDisciplinaryIncidents(data);
+            if (data) {
+                setDisciplinaryIncidents(data);
+
+                // Show notification if there are unsigned incidents on load
+                const unsigned = data.filter((inc: any) => !inc.worker_signature);
+                if (unsigned.length > 0) {
+                    setNotification({
+                        show: true,
+                        message: `Notice: You have ${unsigned.length} pending incident reports that require your review.`,
+                        severity: 'major'
+                    });
+                    setTimeout(() => setNotification(null), 10000);
+                }
+            }
         } catch (err) {
             console.error('Error fetching disciplinary incidents:', err);
         }
     };
 
+    const fetchPendingPolicies = async () => {
+        if (!user) return;
+        try {
+            const { data: policies } = await supabase
+                .from('disciplinary_policies')
+                .select('*')
+                .eq('is_active', true);
+
+            const { data: acks } = await supabase
+                .from('policy_acknowledgments')
+                .select('policy_id')
+                .eq('worker_id', user.id);
+
+            const ackedIds = acks?.map((a: any) => a.policy_id) || [];
+            const pending = policies?.filter((p: any) => !ackedIds.includes(p.id)) || [];
+            setPendingPolicies(pending);
+        } catch (err) {
+            console.error('Error fetching policies:', err);
+        }
+    };
+
+    const handleAcknowledgePolicy = async (policyId: string) => {
+        if (!policySignature) {
+            alert('Please type your full name to sign the policy.');
+            return;
+        }
+        if (!user) return;
+        setIsSigningPolicy(true);
+        try {
+            const { error } = await (supabase as any)
+                .from('policy_acknowledgments')
+                .insert({
+                    worker_id: user.id,
+                    policy_id: policyId,
+                    signature_data: policySignature,
+                    signed_at: new Date().toISOString()
+                });
+
+            if (error) throw error;
+            setPolicySignature('');
+            await fetchPendingPolicies();
+        } catch (err) {
+            console.error(err);
+            alert('Failed to sign policy');
+        } finally {
+            setIsSigningPolicy(false);
+        }
+    };
+
     if (authLoading) return <div className="loading-screen">Authenticating...</div>;
     if (!user) return <Navigate to="/login" replace />;
+
+    if (pendingPolicies.length > 0) {
+        const currentPolicy = pendingPolicies[0];
+        return (
+            <div style={{ position: 'fixed', inset: 0, background: '#0f172a', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+                <div style={{ background: 'white', width: '100%', maxWidth: '800px', borderRadius: '32px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+                    <div style={{ background: '#1e1b4b', padding: '2rem', color: 'white' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900 }}>Mandatory Policy Review</h1>
+                                <p style={{ margin: '0.5rem 0 0', opacity: 0.8, fontSize: '0.9rem' }}>Requirement for Work Authorization</p>
+                            </div>
+                            <div style={{ background: '#fbbf24', color: '#1e1b4b', padding: '0.5rem 1rem', borderRadius: '12px', fontWeight: 800, fontSize: '0.8rem' }}>
+                                {pendingPolicies.length} Pending
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style={{ padding: '2.5rem', overflowY: 'auto', flex: 1 }}>
+                        <h2 style={{ fontSize: '1.75rem', fontWeight: 900, color: '#1e1b4b', marginBottom: '1.5rem' }}>{currentPolicy.title}</h2>
+                        <div style={{ color: '#334155', lineHeight: '1.8', fontSize: '1.1rem', whiteSpace: 'pre-wrap' }}>
+                            {currentPolicy.content}
+                        </div>
+                    </div>
+
+                    <div style={{ padding: '2rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Full Legal Name Signature</label>
+                            <input
+                                type="text"
+                                value={policySignature}
+                                onChange={e => setPolicySignature(e.target.value)}
+                                placeholder="Type your full name exactly as per ID..."
+                                style={{ width: '100%', padding: '1.25rem', borderRadius: '16px', border: '2px solid #e2e8f0', fontSize: '1.1rem', background: 'white' }}
+                            />
+                        </div>
+                        <button
+                            disabled={isSigningPolicy || !policySignature}
+                            onClick={() => handleAcknowledgePolicy(currentPolicy.id)}
+                            style={{
+                                width: '100%',
+                                padding: '1.25rem',
+                                borderRadius: '16px',
+                                background: policySignature ? '#1e1b4b' : '#94a3b8',
+                                color: 'white',
+                                border: 'none',
+                                fontSize: '1.1rem',
+                                fontWeight: 800,
+                                cursor: policySignature ? 'pointer' : 'not-allowed',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {isSigningPolicy ? 'Submitting Signature...' : 'I Accept & Sign Policy'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     const handleClockIn = async () => {
         if (!user) return;
@@ -337,50 +477,51 @@ export const WorkerPortalPage: React.FC = () => {
                 .worker-portal-layout {
                     display: flex;
                     min-height: 100vh;
-                    background: #F4F7FE;
-                    font-family: 'Inter', sans-serif;
-                    color: #1E293B;
+                    background: #f8fafc;
+                    font-family: 'Outfit', sans-serif;
+                    color: #0f172a;
                 }
 
                 .worker-sidebar {
-                    width: 280px;
-                    background: #262661;
+                    width: 260px;
+                    background: #1e1b4b;
                     color: white;
                     display: flex;
                     flex-direction: column;
-                    padding: 2.5rem 1.5rem;
-                    border-right: 1px solid rgba(255,255,255,0.05);
+                    padding: 2rem 1.25rem;
                     flex-shrink: 0;
                     position: sticky;
                     top: 0;
                     height: 100vh;
+                    box-shadow: 10px 0 30px rgba(0,0,0,0.1);
                 }
 
                 .sidebar-brand {
                     display: flex;
                     align-items: center;
-                    gap: 0.85rem;
-                    margin-bottom: 3.5rem;
-                    padding: 0 0.5rem;
+                    gap: 1rem;
+                    margin-bottom: 4rem;
+                    padding: 0 0.75rem;
                 }
 
                 .sidebar-logo {
-                    width: 32px;
-                    height: 32px;
-                    background: #EDAD2F;
-                    border-radius: 8px;
+                    width: 38px;
+                    height: 38px;
+                    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+                    border-radius: 10px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    color: #262661;
+                    color: white;
                     font-weight: 900;
-                    font-size: 1.25rem;
+                    font-size: 1.4rem;
+                    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
                 }
 
                 .sidebar-nav {
                     display: flex;
                     flex-direction: column;
-                    gap: 0.75rem;
+                    gap: 0.5rem;
                     flex: 1;
                 }
 
@@ -388,224 +529,190 @@ export const WorkerPortalPage: React.FC = () => {
                     display: flex;
                     align-items: center;
                     gap: 1rem;
-                    padding: 1.15rem 1.5rem;
-                    border-radius: 14px;
+                    padding: 0.9rem 1.25rem;
+                    border-radius: 12px;
                     color: rgba(255, 255, 255, 0.6);
                     font-weight: 600;
                     text-decoration: none;
                     cursor: pointer;
-                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                    border: 1px solid transparent;
+                    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
                 }
 
                 .nav-item:hover {
                     background: rgba(255, 255, 255, 0.05);
                     color: white;
+                    transform: translateX(4px);
                 }
 
                 .nav-item.active {
-                    background: #EDAD2F;
-                    color: #262661;
-                    box-shadow: 0 4px 15px rgba(237, 173, 47, 0.25);
-                    border-color: #EDAD2F;
-                }
-
-                .nav-item i {
-                    width: 20px;
-                    text-align: center;
-                    font-size: 1.2rem;
+                    background: #f59e0b;
+                    color: white;
+                    box-shadow: 0 10px 20px -5px rgba(245, 158, 11, 0.4);
                 }
 
                 .sidebar-footer {
                     margin-top: auto;
+                    padding-top: 1.5rem;
                     border-top: 1px solid rgba(255, 255, 255, 0.1);
-                    padding-top: 2rem;
                 }
 
                 .worker-main {
                     flex: 1;
                     display: flex;
                     flex-direction: column;
-                    background: #F4F7FE;
+                    min-width: 0; /* Important for flex child in full screen */
                 }
 
                 .worker-topbar {
-                    height: 90px;
-                    background: white;
+                    height: 80px;
+                    background: rgba(255, 255, 255, 0.8);
+                    backdrop-filter: blur(12px);
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
                     padding: 0 3rem;
-                    border-bottom: 1px solid #E2E8F0;
+                    border-bottom: 1px solid #e2e8f0;
+                    position: sticky;
+                    top: 0;
+                    z-index: 100;
                 }
 
                 .worker-content {
-                    padding: 3rem;
-                    max-width: 1100px;
+                    padding: 2.5rem 3.5rem;
                     width: 100%;
+                    max-width: 1800px; /* Expansive full screen view */
                     margin: 0 auto;
-                }
-
-                .notification-popup {
-                    position: fixed;
-                    top: 2rem;
-                    right: 2rem;
-                    background: white;
-                    color: #262661;
-                    padding: 1.5rem 2rem;
-                    border-radius: 20px;
-                    box-shadow: 0 25px 50px -12px rgba(38, 38, 97, 0.25);
-                    display: flex;
-                    align-items: center;
-                    gap: 1.5rem;
-                    z-index: 100000;
-                    animation: slideIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-                    border-left: 6px solid #ef4444;
-                    max-width: 450px;
-                }
-
-                @keyframes slideIn {
-                    from { transform: translateX(120%); opacity: 0; }
-                    to { transform: translateX(0); opacity: 1; }
                 }
 
                 .status-card, .profile-section, .conduct-section {
                     background: white;
                     border-radius: 24px;
                     padding: 2.5rem;
-                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-                    border: 1px solid #E2E8F0;
+                    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+                    border: 1px solid #f1f5f9;
                     margin-bottom: 2rem;
+                    transition: transform 0.3s ease, box-shadow 0.3s ease;
+                }
+
+                .status-card:hover, .profile-section:hover, .conduct-section:hover {
+                    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.05);
                 }
 
                 .status-label {
-                    font-size: 0.85rem;
-                    font-weight: 700;
-                    color: #64748B;
+                    font-size: 0.75rem;
+                    font-weight: 800;
+                    color: #94a3b8;
                     text-transform: uppercase;
-                    letter-spacing: 0.08em;
-                    margin-bottom: 1rem;
+                    letter-spacing: 0.1em;
+                    margin-bottom: 1.25rem;
                 }
 
                 .status-value {
-                    font-size: 2.5rem;
-                    font-weight: 900;
+                    font-size: 3rem;
+                    font-weight: 800;
                     display: flex;
                     align-items: center;
-                    gap: 1.25rem;
+                    gap: 1.5rem;
                     margin-bottom: 0.5rem;
+                    letter-spacing: -0.02em;
                 }
 
                 .status-dot {
-                    width: 14px;
-                    height: 14px;
+                    width: 16px;
+                    height: 16px;
                     border-radius: 50%;
                 }
 
-                .status-present { color: #10B981; }
-                .status-offline { color: #94A3B8; }
-                .dot-present { background: #10B981; box-shadow: 0 0 15px rgba(16, 185, 129, 0.5); }
-                .dot-offline { background: #94A3B8; }
+                .status-present { color: #10b981; }
+                .status-offline { color: #94a3b8; }
+                .dot-present { background: #10b981; box-shadow: 0 0 20px rgba(16, 185, 129, 0.6); }
+                .dot-offline { background: #94a3b8; }
 
                 .time-display {
-                    font-size: 1.75rem;
-                    font-weight: 800;
-                    color: #262661;
-                    font-family: 'JetBrains Mono', monospace;
+                    font-size: 2rem;
+                    font-weight: 700;
+                    color: #1e1b4b;
+                    font-variant-numeric: tabular-nums;
                 }
 
                 .clock-btn {
-                    padding: 1.5rem;
-                    border-radius: 18px;
-                    font-size: 1.15rem;
-                    font-weight: 800;
+                    padding: 1.25rem 2rem;
+                    border-radius: 16px;
+                    font-size: 1.1rem;
+                    font-weight: 700;
                     border: none;
                     cursor: pointer;
-                    transition: all 0.3s;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    width: 100%;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    gap: 0.8rem;
-                    width: 100%;
+                    gap: 0.75rem;
                 }
 
-                .clock-in-btn { background: #10B981; color: white; }
-                .clock-out-btn { background: #EF4444; color: white; }
+                .clock-in-btn {
+                    background: #10b981;
+                    color: white;
+                    box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3);
+                }
+
+                .clock-out-btn {
+                    background: #ef4444;
+                    color: white;
+                    box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.3);
+                }
+
+                .clock-btn:hover {
+                    transform: translateY(-2px);
+                    filter: brightness(1.1);
+                }
 
                 .worker-avatar {
-                    width: 48px;
-                    height: 48px;
-                    background: #262661;
-                    color: #EDAD2F;
+                    width: 44px;
+                    height: 44px;
+                    background: #1e1b4b;
+                    color: #f59e0b;
                     border-radius: 12px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    font-weight: 900;
-                }
-
-                .pilled-badge {
-                    padding: 0.35rem 0.85rem;
-                    border-radius: 999px;
-                    font-size: 0.75rem;
                     font-weight: 800;
-                    letter-spacing: 0.02em;
-                }
-
-                .form-group {
-                    margin-bottom: 1.5rem;
+                    font-size: 1.2rem;
                 }
 
                 .form-group label {
-                    display: block;
-                    margin-bottom: 0.6rem;
+                    font-size: 0.9rem;
                     font-weight: 700;
-                    color: #262661;
+                    color: #1e1b4b;
+                    margin-bottom: 0.75rem;
                 }
 
                 .form-group input, .form-group textarea {
-                    width: 100%;
                     padding: 1rem 1.25rem;
-                    border-radius: 14px;
-                    border: 1.5px solid #E2E8F0;
-                    background: #F8FAFC;
+                    border-radius: 12px;
+                    border: 1.5px solid #e2e8f0;
+                    background: #f8fafc;
                     font-size: 1rem;
                     transition: all 0.2s;
+                    font-weight: 500;
                 }
 
-                .form-group input:focus {
-                    border-color: #EDAD2F;
+                .form-group input:focus, .form-group textarea:focus {
+                    border-color: #f59e0b;
                     background: white;
-                    outline: none;
-                }
-
-                .nfc-heartbeat {
-                    width: 12px;
-                    height: 12px;
-                    border-radius: 50%;
-                    background: #10B981;
-                    display: inline-block;
-                    margin-right: 8px;
-                    animation: heartbeat 1.5s ease-in-out infinite;
-                }
-
-                @keyframes heartbeat {
-                    0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-                    70% { transform: scale(1.3); opacity: 0.5; box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-                    100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+                    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1);
                 }
 
                 .nfc-status-bar {
-                    background: #F8FAFC;
-                    border: 1px solid #E2E8F0;
-                    border-radius: 12px;
-                    padding: 0.75rem 1.25rem;
+                    background: #ffffff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 16px;
+                    padding: 1rem 1.5rem;
+                    font-weight: 700;
                     display: flex;
                     align-items: center;
-                    font-size: 0.85rem;
-                    font-weight: 700;
-                    color: #64748B;
-                    margin-bottom: 2rem;
+                    margin-bottom: 2.5rem;
+                    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
                 }
 
                 .nfc-status-error { color: #EF4444; border-color: #FEE2E2; background: #FFF7ED; }
@@ -615,16 +722,59 @@ export const WorkerPortalPage: React.FC = () => {
                     .worker-sidebar { width: 80px; padding: 2.5rem 0.75rem; }
                     .sidebar-brand span, .nav-item span { display: none; }
                 }
+
+                .notification-popup {
+                    position: fixed;
+                    top: 2rem;
+                    right: 2rem;
+                    background: white;
+                    border-radius: 20px;
+                    padding: 1.5rem;
+                    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                    display: flex;
+                    align-items: center;
+                    gap: 1.5rem;
+                    z-index: 10000;
+                    border: 1px solid #e2e8f0;
+                    min-width: 400px;
+                    animation: slideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
             ` }} />
 
             {notification?.show && (
-                <div className="notification-popup">
-                    <div style={{ width: '50px', height: '50px', background: '#fee2e2', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <i className="fa-solid fa-triangle-exclamation" style={{ color: '#ef4444', fontSize: '1.5rem' }}></i>
+                <div className="notification-popup" style={{
+                    borderLeft: `6px solid ${notification.severity === 'success' ? '#10b981' :
+                        notification.severity === 'major' || notification.severity === 'error' ? '#ef4444' : '#f59e0b'
+                        }`
+                }}>
+                    <div style={{
+                        width: '50px',
+                        height: '50px',
+                        background: notification.severity === 'success' ? '#dcfce7' :
+                            notification.severity === 'major' || notification.severity === 'error' ? '#fee2e2' : '#fef3c7',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}>
+                        <i className={`fa-solid ${notification.severity === 'success' ? 'fa-circle-check' :
+                            notification.severity === 'major' || notification.severity === 'error' ? 'fa-triangle-exclamation' : 'fa-circle-info'
+                            }`} style={{
+                                color: notification.severity === 'success' ? '#10b981' :
+                                    notification.severity === 'major' || notification.severity === 'error' ? '#ef4444' : '#d97706',
+                                fontSize: '1.5rem'
+                            }}></i>
                     </div>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 800, fontSize: '1rem', color: '#262661', marginBottom: '0.25rem' }}>DISCIPLINARY ALERT</div>
-                        <div style={{ fontSize: '0.9rem', color: '#64748B', lineHeight: '1.4' }}>{notification.message}</div>
+                        <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#1e1b4b', marginBottom: '0.25rem', textTransform: 'uppercase' }}>
+                            {notification.severity === 'success' ? 'Success' : 'Attention Required'}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#64748B', lineHeight: '1.4' }}>{notification.message}</div>
                     </div>
                     <button onClick={() => setNotification(null)} style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '0.5rem' }}>
                         <i className="fa-solid fa-xmark"></i>
@@ -635,7 +785,7 @@ export const WorkerPortalPage: React.FC = () => {
             <aside className="worker-sidebar">
                 <div className="sidebar-brand">
                     <div className="sidebar-logo">B</div>
-                    <span style={{ fontSize: '1.5rem', fontWeight: 900 }}>Babylon</span>
+                    <span style={{ fontSize: '1.75rem', fontWeight: 900, letterSpacing: '-0.02em' }}>Babylon</span>
                 </div>
 
                 <nav className="sidebar-nav">
@@ -672,16 +822,16 @@ export const WorkerPortalPage: React.FC = () => {
             <main className="worker-main">
                 <header className="worker-topbar">
                     <div>
-                        <div style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Working Portal</div>
-                        <h2 style={{ margin: 0, fontWeight: 900, color: '#262661' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Member Portal</div>
+                        <h2 style={{ margin: 0, fontWeight: 900, color: '#1e1b4b', fontSize: '1.75rem' }}>
                             {activeTab === 'dashboard' ? 'Overview' : activeTab === 'personal_info' ? 'Update Details' : activeTab === 'conduct' ? 'Compliance' : activeTab === 'settings' ? 'Preferences' : 'Guides'}
                         </h2>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
                             <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontWeight: 800, color: '#262661' }}>{user.name}</div>
-                                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>ID: {user.worker_id}</div>
+                                <div style={{ fontWeight: 800, color: '#1e1b4b' }}>{user.name}</div>
+                                <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 700 }}>ID: {user.worker_id}</div>
                             </div>
                             <div className="worker-avatar">{user.name?.[0]}</div>
                         </div>
@@ -754,103 +904,142 @@ export const WorkerPortalPage: React.FC = () => {
 
                     {activeTab === 'personal_info' && (
                         <div className="profile-section">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2.5rem', alignItems: 'center' }}>
-                                <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: '#262661' }}>Personal Information</h3>
-                                <button className="edit-btn" onClick={() => setEditMode(!editMode)} style={{ padding: '0.75rem 1.5rem', borderRadius: '12px', border: 'none', background: editMode ? '#fee2e2' : '#F1F5F9', color: editMode ? '#ef4444' : '#262661', fontWeight: 700, cursor: 'pointer' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3.5rem', alignItems: 'center' }}>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 900, color: '#1e1b4b' }}>Personal Information</h3>
+                                    <p style={{ color: '#94a3b8', marginTop: '0.5rem', fontWeight: 600 }}>Manage your contact and identification details</p>
+                                </div>
+                                <button className="edit-btn" onClick={() => setEditMode(!editMode)} style={{ padding: '0.9rem 1.75rem', borderRadius: '14px', border: 'none', background: editMode ? '#fee2e2' : '#f1f5f9', color: editMode ? '#ef4444' : '#1e1b4b', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }}>
                                     {editMode ? 'Cancel Edit' : 'Edit Profile'}
                                 </button>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2.5rem' }}>
                                 <div className="form-group"><label>Full Name</label><input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} disabled={!editMode} /></div>
                                 <div className="form-group"><label>Worker ID</label><input value={user.worker_id} disabled /></div>
                                 <div className="form-group"><label>Phone Number</label><input value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} disabled={!editMode} /></div>
                                 <div className="form-group"><label>Email Address</label><input value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} disabled={!editMode} /></div>
                                 <div className="form-group" style={{ gridColumn: '1 / -1' }}><label>Home Address</label><textarea rows={3} value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} disabled={!editMode} /></div>
                             </div>
-                            {editMode && <button className="clock-btn clock-in-btn" style={{ background: '#262661', marginTop: '1rem' }} onClick={handleSaveProfile} disabled={loading}>Save Updated Details</button>}
+                            {editMode && <button className="clock-btn" style={{ background: '#1e1b4b', marginTop: '2rem', color: 'white' }} onClick={handleSaveProfile} disabled={loading}>Save Updated Details</button>}
                         </div>
                     )}
 
                     {activeTab === 'conduct' && (
                         <div className="conduct-section">
-                            <div style={{ marginBottom: '3rem' }}>
-                                <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: '#262661' }}>Conduct Record</h3>
-                                <p style={{ color: '#64748B', marginTop: '0.5rem' }}>Review your compliance status and official acknowledgments</p>
+                            <div style={{ marginBottom: '4rem' }}>
+                                <h3 style={{ margin: 0, fontSize: '2rem', fontWeight: 900, color: '#1e1b4b', letterSpacing: '-0.03em' }}>Conduct Record</h3>
+                                <p style={{ color: '#94a3b8', marginTop: '0.5rem', fontWeight: 600, fontSize: '1.1rem' }}>Review your compliance status and official acknowledgments</p>
                             </div>
-                            <div style={{ backgroundColor: '#F8FAFC', padding: '1.5rem', borderRadius: '20px', marginBottom: '3rem', border: '1px solid #E2E8F0' }}>
-                                <div className="status-label" style={{ marginBottom: '1rem' }}>Active Policies</div>
+                            <div style={{ backgroundColor: '#f8fafc', padding: '2rem', borderRadius: '24px', marginBottom: '4rem', border: '1px solid #e2e8f0' }}>
+                                <div className="status-label" style={{ marginBottom: '1.5rem' }}>Active Policies</div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div>
-                                        <div style={{ fontWeight: 800, color: '#262661' }}>Employee Disciplinary Standards (SOP 3.7)</div>
-                                        <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '0.25rem' }}>v1.0 • Effective March 2024</div>
+                                        <div style={{ fontWeight: 800, color: '#1e1b4b', fontSize: '1.1rem' }}>Employee Disciplinary Standards (SOP 3.7)</div>
+                                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.4rem', fontWeight: 700 }}>v1.0 • Effective March 2024</div>
                                     </div>
-                                    <div className="pilled-badge" style={{ backgroundColor: '#dcfce7', color: '#166534' }}><i className="fa-solid fa-check-double"></i> SIGNED</div>
+                                    <div className="pilled-badge" style={{ backgroundColor: '#dcfce7', color: '#065f46', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem' }}>
+                                        <i className="fa-solid fa-circle-check"></i> SIGNED
+                                    </div>
                                 </div>
                             </div>
-                            <div className="status-label" style={{ marginBottom: '1.5rem' }}>History of Incidents</div>
+                            <div className="status-label" style={{ marginBottom: '2rem' }}>History of Incidents</div>
                             {disciplinaryIncidents.length > 0 ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                <div style={{
+                                    background: '#ebedf0',
+                                    padding: '2rem',
+                                    borderRadius: '20px',
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(3, 1fr)',
+                                    gap: '1.25rem',
+                                    minHeight: '400px'
+                                }}>
                                     {disciplinaryIncidents.map(incident => (
-                                        <div key={incident.id} style={{ padding: '2rem', borderRadius: '24px', border: '1px solid #E2E8F0', borderLeft: incident.severity === 'gross_misconduct' ? '8px solid #ef4444' : incident.severity === 'major' ? '8px solid #f97316' : '8px solid #fbbf24' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                                <div className="pilled-badge" style={{ backgroundColor: incident.severity === 'gross_misconduct' ? '#fee2e2' : '#fef3c7', color: incident.severity === 'gross_misconduct' ? '#991b1b' : '#92400e' }}>{incident.severity.toUpperCase().replace('_', ' ')}</div>
-                                                <div style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 600 }}>{new Date(incident.incident_date).toLocaleDateString()}</div>
+                                        <div key={incident.id} style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            padding: '1rem 1.25rem',
+                                            borderRadius: '8px',
+                                            background: '#ffffff',
+                                            boxShadow: '0 1px 0 rgba(9, 30, 66, .25)',
+                                            border: 'none',
+                                            height: 'fit-content',
+                                            cursor: 'pointer',
+                                            transition: 'background 0.2s',
+                                        }}>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
+                                                <div style={{
+                                                    height: '8px',
+                                                    width: '40px',
+                                                    borderRadius: '4px',
+                                                    background: incident.severity === 'gross_misconduct' ? '#ef4444' : incident.severity === 'major' ? '#f59e0b' : '#fbbf24'
+                                                }}></div>
+                                                <div style={{
+                                                    fontSize: '0.7rem',
+                                                    fontWeight: 800,
+                                                    color: incident.severity === 'gross_misconduct' ? '#991b1b' : '#92400e',
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.02em'
+                                                }}>
+                                                    {incident.severity.replace('_', ' ')}
+                                                </div>
                                             </div>
-                                            <h4 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#262661' }}>{incident.category.toUpperCase()}</h4>
-                                            <div style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 700, marginTop: '0.5rem' }}>DOC: {incident.documentation || 'N/A'}</div>
-                                            <p style={{ margin: '0.5rem 0 1rem', color: '#475569', lineHeight: '1.5' }}>{incident.description}</p>
 
-                                            {incident.signed_at ? (
-                                                <div style={{ padding: '1.5rem', background: '#F0F9FF', borderRadius: '16px', border: '1px solid #BAE6FD', marginTop: '1.5rem' }}>
-                                                    <div style={{ fontWeight: 800, color: '#0369A1', fontSize: '0.8rem', textTransform: 'uppercase' }}>Your Official Response</div>
-                                                    <p style={{ margin: '0.5rem 0 1rem', fontStyle: 'italic', color: '#0E7490' }}>"{incident.worker_explanation || 'No explanation provided.'}"</p>
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #E0F2FE', paddingTop: '0.75rem' }}>
-                                                        <div style={{ fontSize: '0.85rem', color: '#64748B' }}>
-                                                            Signed digitally by: <strong>{incident.worker_signature}</strong>
+                                            <h4 style={{ margin: '0 0 6px 0', fontSize: '1rem', fontWeight: 600, color: '#172b4d' }}>
+                                                {incident.category.toUpperCase().replace('_', ' ')}
+                                            </h4>
+
+                                            <div style={{ fontSize: '0.75rem', color: '#5e6c84', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <i className="fa-solid fa-file-lines" style={{ fontSize: '0.7rem' }}></i>
+                                                {incident.documentation || 'No Reference'}
+                                            </div>
+
+                                            <p style={{ margin: '0 0 16px 0', color: '#172b4d', lineHeight: '1.5', fontSize: '0.9rem' }}>
+                                                {incident.description}
+                                            </p>
+
+                                            <div style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid #ebedf0' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <div title="Date Occurred" style={{ fontSize: '0.75rem', color: '#5e6c84', background: '#f4f5f7', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>
+                                                            <i className="fa-regular fa-calendar" style={{ marginRight: '4px' }}></i>
+                                                            {new Date(incident.incident_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                                         </div>
-                                                        <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
-                                                            Acknowledged on: {new Date(incident.signed_at).toLocaleDateString()}
-                                                        </div>
+                                                        {incident.signed_at && (
+                                                            <div title="Signed & Verified" style={{ fontSize: '0.75rem', color: '#ffffff', background: '#61bd4f', padding: '2px 6px', borderRadius: '3px', fontWeight: 700 }}>
+                                                                <i className="fa-solid fa-check-double"></i>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#dfe1e6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 800, color: '#172b4d' }}>
+                                                        {user.name?.[0]}
                                                     </div>
                                                 </div>
-                                            ) : (
-                                                <div style={{ padding: '1.5rem', background: '#FFF7ED', borderRadius: '16px', border: '1px solid #FFEDD5', marginTop: '1.5rem' }}>
-                                                    <div style={{ fontWeight: 800, color: '#9A3412', fontSize: '0.8rem', textTransform: 'uppercase', marginBottom: '1rem' }}>Worker Response Required</div>
-                                                    <div className="form-group">
-                                                        <label style={{ fontSize: '0.85rem' }}>Provide Explanation (Optional)</label>
-                                                        <textarea
-                                                            rows={2}
-                                                            placeholder="State your side of the incident..."
-                                                            style={{ background: 'white', borderRadius: '10px' }}
-                                                            value={signingData[incident.id]?.explanation || ''}
-                                                            onChange={e => updateSigningLocal(incident.id, 'explanation', e.target.value)}
-                                                        />
-                                                    </div>
-                                                    <div className="form-group">
-                                                        <label style={{ fontSize: '0.85rem' }}>Type Your Full Name to Sign</label>
+
+                                                {!incident.signed_at ? (
+                                                    <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff7ed', borderRadius: '8px', border: '1px solid #ffedd5' }}>
+                                                        <div style={{ fontWeight: 900, color: '#9a3412', fontSize: '0.65rem', textTransform: 'uppercase', marginBottom: '0.75rem' }}>Awaiting Signature</div>
                                                         <input
                                                             type="text"
-                                                            placeholder="Signature"
-                                                            style={{ background: 'white', borderRadius: '10px' }}
+                                                            placeholder="Type Name to Sign"
+                                                            style={{ background: 'white', border: '1px solid #fed7aa', padding: '0.5rem', fontSize: '0.85rem', width: '100%', borderRadius: '4px', marginBottom: '0.5rem' }}
                                                             value={signingData[incident.id]?.signature || ''}
                                                             onChange={e => updateSigningLocal(incident.id, 'signature', e.target.value)}
                                                         />
+                                                        <button
+                                                            className="clock-btn"
+                                                            style={{ background: '#0079bf', color: 'white', padding: '0.5rem', fontSize: '0.85rem', height: 'auto', borderRadius: '4px' }}
+                                                            onClick={() => handleSignIncident(incident.id)}
+                                                            disabled={loading}
+                                                        >
+                                                            Sign Now
+                                                        </button>
                                                     </div>
-                                                    <button
-                                                        className="clock-btn clock-in-btn"
-                                                        style={{ background: '#262661', fontSize: '0.9rem', padding: '1rem' }}
-                                                        onClick={() => handleSignIncident(incident.id)}
-                                                        disabled={loading}
-                                                    >
-                                                        Review & Sign Misconduct
-                                                    </button>
-                                                </div>
-                                            )}
-                                            {incident.actions?.map((action: any) => (
-                                                <div key={action.id} style={{ padding: '0.75rem', background: '#F8FAFC', borderRadius: '12px', color: '#059669', fontWeight: 800, fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                                                    <i className="fa-solid fa-gavel"></i> {action.action_step.replace('_', ' ').toUpperCase()}
-                                                </div>
-                                            ))}
+                                                ) : (
+                                                    <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: '#5e6c84', fontStyle: 'italic' }}>
+                                                        "Resolved & Acknowledged"
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
