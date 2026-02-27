@@ -244,11 +244,11 @@ export const WorkerPortalPage: React.FC = () => {
             reader.onreadingerror = () => {
                 setNotification({
                     show: true,
-                    message: "Tag detected but couldn't be read. Is it NDEF formatted?",
+                    message: "Tag detected but blocked by Chrome. Please use 'NFC Tools' to write a small Text record to this card first.",
                     severity: 'warning'
                 });
                 setNfcStatus('error');
-                setTimeout(() => setNfcStatus('listening'), 3000);
+                setTimeout(() => setNfcStatus('listening'), 5000);
             };
 
         } catch (error: any) {

@@ -37,11 +37,19 @@ export const NfcManagementPage: React.FC = () => {
             const reader = new (window as any).NDEFReader();
             await reader.scan();
 
-            reader.addEventListener("reading", ({ serialNumber }: any) => {
+            reader.onreading = ({ serialNumber }: any) => {
                 setScannedTagId(serialNumber);
                 setIsScanning(false);
                 setStatusMatch({ type: 'success', message: `Tag Captured: ${serialNumber}` });
-            }, { once: true });
+            };
+
+            reader.onreadingerror = () => {
+                setIsScanning(false);
+                setStatusMatch({
+                    type: 'error',
+                    message: 'Tag detected but blocked. Use "NFC Tools" to write a Text record to this card first.'
+                });
+            };
 
         } catch (error) {
             console.error(error);
