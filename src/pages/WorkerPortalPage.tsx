@@ -695,8 +695,8 @@ export const WorkerPortalPage: React.FC = () => {
                     {nfcStatus !== 'idle' && (
                         <div
                             className={`nfc-status-bar ${nfcStatus === 'error' ? 'nfc-status-error' : nfcStatus === 'reading' ? 'nfc-status-reading' : ''}`}
-                            onClick={() => (nfcStatus === 'error' || nfcStatus === 'idle') && startNfcListening()}
-                            style={{ cursor: (nfcStatus === 'error' || nfcStatus === 'idle') ? 'pointer' : 'default' }}
+                            onClick={() => (nfcStatus === 'error') && startNfcListening()}
+                            style={{ cursor: (nfcStatus === 'error') ? 'pointer' : 'default' }}
                         >
                             {nfcStatus === 'listening' && <div className="nfc-heartbeat"></div>}
                             {nfcStatus === 'listening' ? "NFC Active: Tap card to clock in/out" :
