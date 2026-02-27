@@ -230,24 +230,34 @@ export const WorkerPortalPage: React.FC = () => {
     const startNfcListening = async () => {
         try {
             const reader = new (window as any).NDEFReader();
+            // Permissions: Chrome requires a user gesture if not already allowed.
             await reader.scan();
             setNfcStatus('listening');
 
-            reader.addEventListener("reading", async ({ serialNumber }: any) => {
+            reader.onreading = async (event: any) => {
+                const { serialNumber } = event;
                 setNfcStatus('reading');
                 await processNfcTap(serialNumber);
-                // Reset to listening after a delay
-                setTimeout(() => setNfcStatus('listening'), 3000);
-            });
+                setTimeout(() => setNfcStatus('listening'), 2000);
+            };
 
-            reader.addEventListener("readingerror", () => {
+            reader.onreadingerror = () => {
+                setNotification({
+                    show: true,
+                    message: "Tag detected but couldn't be read. Is it NDEF formatted?",
+                    severity: 'warning'
+                });
                 setNfcStatus('error');
                 setTimeout(() => setNfcStatus('listening'), 3000);
-            });
+            };
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("NFC Error:", error);
-            setNfcStatus('error');
+            if (error.name === 'NotAllowedError') {
+                setNfcStatus('idle'); // Needs user gesture
+            } else {
+                setNfcStatus('error');
+            }
         }
     };
 
@@ -683,11 +693,21 @@ export const WorkerPortalPage: React.FC = () => {
 
                 <div className="worker-content">
                     {nfcStatus !== 'idle' && (
-                        <div className={`nfc-status-bar ${nfcStatus === 'error' ? 'nfc-status-error' : nfcStatus === 'reading' ? 'nfc-status-reading' : ''}`}>
+                        <div
+                            className={`nfc-status-bar ${nfcStatus === 'error' ? 'nfc-status-error' : nfcStatus === 'reading' ? 'nfc-status-reading' : ''}`}
+                            onClick={() => (nfcStatus === 'error' || nfcStatus === 'idle') && startNfcListening()}
+                            style={{ cursor: (nfcStatus === 'error' || nfcStatus === 'idle') ? 'pointer' : 'default' }}
+                        >
                             {nfcStatus === 'listening' && <div className="nfc-heartbeat"></div>}
                             {nfcStatus === 'listening' ? "NFC Active: Tap card to clock in/out" :
                                 nfcStatus === 'reading' ? "Reading Tag..." :
-                                    nfcStatus === 'error' ? "NFC Error: Check settings or device support" : "NFC Offline"}
+                                    nfcStatus === 'error' ? "NFC Error: Click here to Retry / Activate" : "NFC Ready: Click to Start Scanner"}
+                        </div>
+                    )}
+                    {nfcStatus === 'idle' && (
+                        <div className="nfc-status-bar" onClick={startNfcListening} style={{ cursor: 'pointer', background: '#FEF3C7', borderColor: '#FDE68A', color: '#92400E' }}>
+                            <i className="fa-solid fa-hand-pointer" style={{ marginRight: '10px' }}></i>
+                            NFC Pending: Tap here to enable scanner
                         </div>
                     )}
 
