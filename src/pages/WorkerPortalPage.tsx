@@ -18,6 +18,7 @@ export const WorkerPortalPage: React.FC = () => {
     const [pendingPolicies, setPendingPolicies] = useState<any[]>([]);
     const [policySignature, setPolicySignature] = useState('');
     const [isSigningPolicy, setIsSigningPolicy] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(false);
 
     const handleSignIncident = async (incidentId: string) => {
         const data = signingData[incidentId];
@@ -474,114 +475,21 @@ export const WorkerPortalPage: React.FC = () => {
         <div className="worker-portal-layout">
             <style dangerouslySetInnerHTML={{
                 __html: `
-                .worker-portal-layout {
-                    display: flex;
-                    min-height: 100vh;
-                    background: #f8fafc;
-                    font-family: 'Outfit', sans-serif;
-                    color: #0f172a;
-                }
-
-                .worker-sidebar {
-                    width: 260px;
-                    background: #1e1b4b;
-                    color: white;
+                .worker-main-wrapper {
                     display: flex;
                     flex-direction: column;
-                    padding: 2rem 1.25rem;
-                    flex-shrink: 0;
-                    position: sticky;
-                    top: 0;
-                    height: 100vh;
-                    box-shadow: 10px 0 30px rgba(0,0,0,0.1);
-                }
-
-                .sidebar-brand {
-                    display: flex;
-                    align-items: center;
-                    gap: 1rem;
-                    margin-bottom: 4rem;
-                    padding: 0 0.75rem;
-                }
-
-                .sidebar-logo {
-                    width: 38px;
-                    height: 38px;
-                    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-                    border-radius: 10px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: white;
-                    font-weight: 900;
-                    font-size: 1.4rem;
-                    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
-                }
-
-                .sidebar-nav {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.5rem;
                     flex: 1;
+                    min-width: 0;
                 }
 
-                .nav-item {
-                    display: flex;
-                    align-items: center;
-                    gap: 1rem;
-                    padding: 0.9rem 1.25rem;
-                    border-radius: 12px;
-                    color: rgba(255, 255, 255, 0.6);
-                    font-weight: 600;
-                    text-decoration: none;
-                    cursor: pointer;
-                    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-                }
-
-                .nav-item:hover {
-                    background: rgba(255, 255, 255, 0.05);
-                    color: white;
-                    transform: translateX(4px);
-                }
-
-                .nav-item.active {
-                    background: #f59e0b;
-                    color: white;
-                    box-shadow: 0 10px 20px -5px rgba(245, 158, 11, 0.4);
-                }
-
-                .sidebar-footer {
-                    margin-top: auto;
-                    padding-top: 1.5rem;
-                    border-top: 1px solid rgba(255, 255, 255, 0.1);
-                }
-
-                .worker-main {
-                    flex: 1;
-                    display: flex;
-                    flex-direction: column;
-                    min-width: 0; /* Important for flex child in full screen */
-                }
-
-                .worker-topbar {
-                    height: 80px;
-                    background: rgba(255, 255, 255, 0.8);
-                    backdrop-filter: blur(12px);
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    padding: 0 3rem;
-                    border-bottom: 1px solid #e2e8f0;
-                    position: sticky;
-                    top: 0;
-                    z-index: 100;
-                }
 
                 .worker-content {
                     padding: 2.5rem 3.5rem;
                     width: 100%;
-                    max-width: 1800px; /* Expansive full screen view */
-                    margin: 0 auto;
+                    margin: 0;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 2.5rem;
                 }
 
                 .status-card, .profile-section, .conduct-section {
@@ -591,11 +499,6 @@ export const WorkerPortalPage: React.FC = () => {
                     box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
                     border: 1px solid #f1f5f9;
                     margin-bottom: 2rem;
-                    transition: transform 0.3s ease, box-shadow 0.3s ease;
-                }
-
-                .status-card:hover, .profile-section:hover, .conduct-section:hover {
-                    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.05);
                 }
 
                 .status-label {
@@ -744,6 +647,110 @@ export const WorkerPortalPage: React.FC = () => {
                     from { transform: translateX(100%); opacity: 0; }
                     to { transform: translateX(0); opacity: 1; }
                 }
+
+                /* Layout overrides to match admin */
+                .worker-main-wrapper {
+                    display: flex;
+                    flex-direction: column;
+                    flex: 1;
+                    margin-left: 260px;
+                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    min-width: 0;
+                }
+                .worker-main-wrapper.expanded {
+                    margin-left: 80px;
+                }
+
+                .on-duty-banner {
+                    width: 100%;
+                    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                    border-radius: 24px;
+                    padding: 3rem;
+                    color: white;
+                    margin-bottom: 2.5rem;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    box-shadow: 0 20px 40px -10px rgba(16, 185, 129, 0.3);
+                    position: relative;
+                    overflow: hidden;
+                }
+
+                .on-duty-banner::after {
+                    content: '';
+                    position: absolute;
+                    top: -50%;
+                    right: -10%;
+                    width: 400px;
+                    height: 400px;
+                    background: rgba(255, 255, 255, 0.1);
+                    border-radius: 50%;
+                    z-index: 1;
+                }
+
+                .off-duty-banner {
+                    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+                    box-shadow: 0 20px 40px -10px rgba(30, 27, 75, 0.3);
+                }
+
+                .banner-content {
+                    position: relative;
+                    z-index: 2;
+                }
+
+                .banner-status {
+                    font-size: 0.85rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.15em;
+                    font-weight: 800;
+                    opacity: 0.9;
+                    margin-bottom: 0.75rem;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                }
+
+                .banner-title {
+                    font-size: 3.5rem;
+                    font-weight: 900;
+                    margin: 0;
+                    letter-spacing: -0.04em;
+                    line-height: 1;
+                }
+
+                .banner-time {
+                    font-size: 1.5rem;
+                    font-weight: 600;
+                    opacity: 0.8;
+                    margin-top: 0.5rem;
+                }
+
+                .banner-actions {
+                    position: relative;
+                    z-index: 2;
+                }
+
+                .clock-btn-premium {
+                    padding: 1.25rem 2.5rem;
+                    border-radius: 18px;
+                    font-size: 1.1rem;
+                    font-weight: 800;
+                    border: none;
+                    cursor: pointer;
+                    transition: all 0.3s;
+                    display: flex;
+                    align-items: center;
+                    gap: 1rem;
+                    background: white;
+                }
+
+                .btn-in { color: #10b981; }
+                .btn-out { color: #ef4444; }
+
+                .clock-btn-premium:hover {
+                    transform: translateY(-4px) scale(1.02);
+                    box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+                }
             ` }} />
 
             {notification?.show && (
@@ -782,45 +789,71 @@ export const WorkerPortalPage: React.FC = () => {
                 </div>
             )}
 
-            <aside className="worker-sidebar">
-                <div className="sidebar-brand">
-                    <div className="sidebar-logo">B</div>
-                    <span style={{ fontSize: '1.75rem', fontWeight: 900, letterSpacing: '-0.02em' }}>Babylon</span>
+            <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+                <div className="brand">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.5rem' }}>
+                        <div className="brand-icon" style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', boxShadow: '0 4px 12px rgba(245, 158, 11, 0.4)' }}>
+                            <span style={{ color: 'white', fontWeight: 900 }}>B</span>
+                        </div>
+                        {!isCollapsed && <span style={{ letterSpacing: '-0.03em', fontSize: '1.4rem', fontWeight: 900, color: 'white' }}>Babylon</span>}
+                    </div>
+                    <button className="sidebar-toggle" onClick={() => setIsCollapsed(!isCollapsed)}>
+                        <i className={`fa-solid ${isCollapsed ? 'fa-bars-staggered' : 'fa-chevron-left'}`}></i>
+                    </button>
                 </div>
 
-                <nav className="sidebar-nav">
-                    <div className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
-                        <i className="fa-solid fa-house"></i>
-                        <span>Dashboard</span>
-                    </div>
-                    <div className={`nav-item ${activeTab === 'personal_info' ? 'active' : ''}`} onClick={() => setActiveTab('personal_info')}>
-                        <i className="fa-solid fa-user"></i>
-                        <span>Personal Info</span>
-                    </div>
-                    <div className={`nav-item ${activeTab === 'conduct' ? 'active' : ''}`} onClick={() => setActiveTab('conduct')}>
-                        <i className="fa-solid fa-shield-halved"></i>
-                        <span>Conduct Record</span>
-                    </div>
-                    <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-                        <i className="fa-solid fa-gear"></i>
-                        <span>Settings</span>
-                    </div>
-                    <div className={`nav-item ${activeTab === 'documentation' ? 'active' : ''}`} onClick={() => setActiveTab('documentation')}>
-                        <i className="fa-solid fa-file-invoice"></i>
-                        <span>Documentation</span>
-                    </div>
-                </nav>
+                <ul className="nav-menu">
+                    <li>
+                        <div className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
+                            <i className="fa-solid fa-house"></i> {!isCollapsed && <span>Dashboard</span>}
+                        </div>
+                    </li>
+                    <li>
+                        <div className={`nav-item ${activeTab === 'personal_info' ? 'active' : ''}`} onClick={() => setActiveTab('personal_info')}>
+                            <i className="fa-solid fa-user"></i> {!isCollapsed && <span>Personal Info</span>}
+                        </div>
+                    </li>
+                    <li>
+                        <div className={`nav-item ${activeTab === 'conduct' ? 'active' : ''}`} onClick={() => setActiveTab('conduct')}>
+                            <i className="fa-solid fa-shield-halved"></i> {!isCollapsed && <span>Conduct Record</span>}
+                        </div>
+                    </li>
+                    <li>
+                        <div className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+                            <i className="fa-solid fa-gear"></i> {!isCollapsed && <span>Settings</span>}
+                        </div>
+                    </li>
+                    <li>
+                        <div className={`nav-item ${activeTab === 'documentation' ? 'active' : ''}`} onClick={() => setActiveTab('documentation')}>
+                            <i className="fa-solid fa-file-invoice"></i> {!isCollapsed && <span>Documentation</span>}
+                        </div>
+                    </li>
+                </ul>
 
-                <div className="sidebar-footer">
-                    <div className="nav-item" onClick={logout} style={{ color: '#ef4444' }}>
-                        <i className="fa-solid fa-power-off"></i>
-                        <span>Logout</span>
-                    </div>
+                <div className="bottom-menu">
+                    <ul className="nav-menu">
+                        <li>
+                            <div className="nav-item" onClick={logout} style={{ color: '#ef4444' }}>
+                                <i className="fa-solid fa-right-from-bracket"></i> {!isCollapsed && <span>Logout</span>}
+                            </div>
+                        </li>
+                    </ul>
                 </div>
             </aside>
 
-            <main className="worker-main">
-                <header className="worker-topbar">
+            <main className={`worker-main-wrapper ${isCollapsed ? 'expanded' : ''}`}>
+                <header className="worker-topbar" style={{
+                    height: '80px',
+                    background: 'white',
+                    borderBottom: '1px solid #e2e8f0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0 3.5rem',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 100
+                }}>
                     <div>
                         <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Member Portal</div>
                         <h2 style={{ margin: 0, fontWeight: 900, color: '#1e1b4b', fontSize: '1.75rem' }}>
@@ -833,20 +866,31 @@ export const WorkerPortalPage: React.FC = () => {
                                 <div style={{ fontWeight: 800, color: '#1e1b4b' }}>{user.name}</div>
                                 <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 700 }}>ID: {user.worker_id}</div>
                             </div>
-                            <div className="worker-avatar">{user.name?.[0]}</div>
+                            <div style={{
+                                width: '44px',
+                                height: '44px',
+                                background: '#1e1b4b',
+                                color: '#f59e0b',
+                                borderRadius: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 800,
+                                fontSize: '1.2rem'
+                            }}>{user.name?.[0]}</div>
                         </div>
                         <button onClick={logout} title="Logout" style={{ width: '40px', height: '40px', borderRadius: '12px', border: 'none', background: '#F1F5F9', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>
-                            <i className="fa-solid fa-power-off"></i>
+                            <i className="fa-solid fa-right-from-bracket"></i>
                         </button>
                     </div>
                 </header>
 
-                <div className="worker-content">
+                <div className="worker-content" style={{ padding: '2.5rem 3.5rem' }}>
                     {nfcStatus !== 'idle' && (
                         <div
                             className={`nfc-status-bar ${nfcStatus === 'error' ? 'nfc-status-error' : nfcStatus === 'reading' ? 'nfc-status-reading' : ''}`}
                             onClick={() => (nfcStatus === 'error') && startNfcListening()}
-                            style={{ cursor: (nfcStatus === 'error') ? 'pointer' : 'default' }}
+                            style={{ cursor: (nfcStatus === 'error') ? 'pointer' : 'default', marginBottom: '2rem' }}
                         >
                             {nfcStatus === 'listening' && <div className="nfc-heartbeat"></div>}
                             {nfcStatus === 'listening' ? "NFC Active: Tap card to clock in/out" :
@@ -862,42 +906,88 @@ export const WorkerPortalPage: React.FC = () => {
                     )}
 
                     {activeTab === 'dashboard' && (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
-                            <div className="status-card">
-                                <div className="status-label">Live Status</div>
-                                <div className={`status-value ${isClockedIn ? 'status-present' : 'status-offline'}`}>
-                                    <div className={`status-dot ${isClockedIn ? 'dot-present' : 'dot-offline'}`}></div>
-                                    {isClockedIn ? 'On Duty' : 'Off Duty'}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)', gap: '2.5rem', width: '100%' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+                                <div className={`on-duty-banner ${!isClockedIn ? 'off-duty-banner' : ''}`}>
+                                    <div className="banner-content">
+                                        <div className="banner-status">
+                                            <div style={{ width: '12px', height: '12px', background: isClockedIn ? '#34d399' : '#94a3b8', borderRadius: '50%', boxShadow: isClockedIn ? '0 0 15px #34d399' : 'none' }}></div>
+                                            {isClockedIn ? 'Operational Status: On Duty' : 'Current Status: Off Duty'}
+                                        </div>
+                                        <h1 className="banner-title">{isClockedIn ? 'Worker Logged In' : 'Shift Not Started'}</h1>
+                                        <div className="banner-time">
+                                            <i className="fa-regular fa-clock" style={{ marginRight: '10px' }}></i>
+                                            {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
+                                        </div>
+                                    </div>
+                                    <div className="banner-actions">
+                                        {!isClockedIn ? (
+                                            <button className="clock-btn-premium btn-in" onClick={handleClockIn} disabled={loading}>
+                                                <i className="fa-solid fa-play"></i> {loading ? 'Clocking in...' : 'Clock In Now'}
+                                            </button>
+                                        ) : (
+                                            <button className="clock-btn-premium btn-out" onClick={handleClockOut} disabled={loading}>
+                                                <i className="fa-solid fa-stop"></i> {loading ? 'Clocking out...' : 'Clock Out Now'}
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="time-display">
-                                    {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}
-                                </div>
-                                <div style={{ marginTop: '2.5rem' }}>
-                                    {!isClockedIn ? (
-                                        <button className="clock-btn clock-in-btn" onClick={handleClockIn} disabled={loading}>
-                                            <i className="fa-solid fa-play"></i> {loading ? 'Clocking in...' : 'Clock In Now'}
-                                        </button>
+
+                                <div className="status-card" style={{ display: 'flex', flexDirection: 'column', width: '100%', margin: 0 }}>
+                                    <div className="status-label">Active Assignments</div>
+                                    {activeTasks.length > 0 ? (
+                                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
+                                            {activeTasks.map(task => (
+                                                <li key={task.id} style={{ padding: '1.5rem', border: '1px solid #E2E8F0', borderRadius: '20px', background: '#F8FAFC', transition: 'transform 0.2s' }}>
+                                                    <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#1e1b4b' }}>{task.description}</div>
+                                                    <div style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '0.5rem', fontWeight: 600 }}>Ref: {task.mo_reference}</div>
+                                                </li>
+                                            ))}
+                                        </ul>
                                     ) : (
-                                        <button className="clock-btn clock-out-btn" onClick={handleClockOut} disabled={loading}>
-                                            <i className="fa-solid fa-stop"></i> {loading ? 'Clocking out...' : 'Clock Out Now'}
-                                        </button>
+                                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4rem', color: '#94A3B8', fontStyle: 'italic', background: '#f8fafc', borderRadius: '20px', border: '1.5px dashed #e2e8f0' }}>Waiting for assignments...</div>
                                     )}
                                 </div>
                             </div>
-                            <div className="status-card" style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div className="status-label">Active Assignments</div>
-                                {activeTasks.length > 0 ? (
-                                    <ul style={{ listStyle: 'none', padding: 0, margin: 0, flex: 1 }}>
-                                        {activeTasks.map(task => (
-                                            <li key={task.id} style={{ padding: '1.25rem', border: '1px solid #E2E8F0', borderRadius: '16px', marginBottom: '1rem', background: '#F8FAFC' }}>
-                                                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#262661' }}>{task.description}</div>
-                                                <div style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '0.25rem' }}>Ref: {task.mo_reference}</div>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : (
-                                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontStyle: 'italic' }}>Waiting for assignments...</div>
-                                )}
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+                                <div className="status-card" style={{ margin: 0 }}>
+                                    <div className="status-label">Today's Summary</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                        <div style={{ padding: '1.5rem', background: '#F0F9FF', borderRadius: '20px', border: '1px solid #BAE6FD' }}>
+                                            <div style={{ fontSize: '0.75rem', color: '#0369A1', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Total Hours</div>
+                                            <div style={{ fontSize: '2rem', fontWeight: 900, color: '#0C4A6E' }}>8.5</div>
+                                        </div>
+                                        <div style={{ padding: '1.5rem', background: '#F0FDF4', borderRadius: '20px', border: '1px solid #BBF7D0' }}>
+                                            <div style={{ fontSize: '0.75rem', color: '#15803D', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Efficiency</div>
+                                            <div style={{ fontSize: '2rem', fontWeight: 900, color: '#064E3B' }}>94%</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="status-card" style={{ margin: 0, flex: 1 }}>
+                                    <div className="status-label">Notifications & Alerts</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                        <div style={{ padding: '1.25rem', background: '#FFF7ED', borderRadius: '16px', border: '1px solid #FFEDD5', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                            <div style={{ width: '40px', height: '40px', background: '#FFEDD5', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <i className="fa-solid fa-bullhorn" style={{ color: '#C2410C' }}></i>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#7C2D12' }}>New Policy Added</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#9A3412', fontWeight: 600 }}>Update SOP 3.7</div>
+                                            </div>
+                                        </div>
+                                        <div style={{ padding: '1.25rem', background: '#EEF2FF', borderRadius: '16px', border: '1px solid #E0E7FF', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                            <div style={{ width: '40px', height: '40px', background: '#E0E7FF', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <i className="fa-solid fa-calendar-check" style={{ color: '#4338CA' }}></i>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: 800, fontSize: '0.9rem', color: '#312E81' }}>Monthly Review</div>
+                                                <div style={{ fontSize: '0.75rem', color: '#3730A3', fontWeight: 600 }}>Scheduled for Friday</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
