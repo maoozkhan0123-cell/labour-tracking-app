@@ -701,7 +701,7 @@ export const WorkerPortalPage: React.FC = () => {
                             {nfcStatus === 'listening' && <div className="nfc-heartbeat"></div>}
                             {nfcStatus === 'listening' ? "NFC Active: Tap card to clock in/out" :
                                 nfcStatus === 'reading' ? "Reading Tag..." :
-                                    nfcStatus === 'error' ? "NFC Error: Click here to Retry / Activate" : "NFC Ready: Click to Start Scanner"}
+                                    nfcStatus === 'error' ? "NFC Error: Click here to Retry / Activate" : "NFC Offline"}
                         </div>
                     )}
                     {nfcStatus === 'idle' && (
