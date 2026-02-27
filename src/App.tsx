@@ -12,6 +12,7 @@ import { EmployeeActivityPage } from './pages/EmployeeActivityPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { WorkerPortalPage } from './pages/WorkerPortalPage';
 import { DisciplineAdminPage } from './pages/DisciplineAdminPage';
+import { NfcManagementPage } from './pages/NfcManagementPage';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
             <Route path="operations" element={<OperationsPage />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="discipline" element={<DisciplineAdminPage />} />
+            <Route path="nfc" element={<NfcManagementPage />} />
           </Route>
         </Routes>
       </Router>

@@ -14,6 +14,7 @@ export const WorkerPortalPage: React.FC = () => {
     const [disciplinaryIncidents, setDisciplinaryIncidents] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<'dashboard' | 'personal_info' | 'conduct' | 'settings' | 'documentation'>('dashboard');
     const [signingData, setSigningData] = useState<{ [key: string]: { explanation: string, signature: string } }>({});
+    const [nfcStatus, setNfcStatus] = useState<'idle' | 'listening' | 'reading' | 'error'>('idle');
 
     const handleSignIncident = async (incidentId: string) => {
         const data = signingData[incidentId];
@@ -115,6 +116,14 @@ export const WorkerPortalPage: React.FC = () => {
             fetchActiveTasks();
             fetchDisciplinaryIncidents();
 
+            // Initialize NFC Listening
+            if ('NDEFReader' in window) {
+                startNfcListening();
+            } else {
+                setNfcStatus('error');
+                console.warn('Web NFC is not supported on this browser/device.');
+            }
+
             const userChannel = supabase
                 .channel(`public:users:id=eq.${user.id}`)
                 .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${user.id}` }, (payload) => {
@@ -215,6 +224,97 @@ export const WorkerPortalPage: React.FC = () => {
             alert('Failed to clock out');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const startNfcListening = async () => {
+        try {
+            const reader = new (window as any).NDEFReader();
+            await reader.scan();
+            setNfcStatus('listening');
+
+            reader.addEventListener("reading", async ({ serialNumber }: any) => {
+                setNfcStatus('reading');
+                await processNfcTap(serialNumber);
+                // Reset to listening after a delay
+                setTimeout(() => setNfcStatus('listening'), 3000);
+            });
+
+            reader.addEventListener("readingerror", () => {
+                setNfcStatus('error');
+                setTimeout(() => setNfcStatus('listening'), 3000);
+            });
+
+        } catch (error) {
+            console.error("NFC Error:", error);
+            setNfcStatus('error');
+        }
+    };
+
+    const processNfcTap = async (tagId: string) => {
+        try {
+            // Find worker by NFC ID
+            const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('nfc_id', tagId)
+                .single();
+
+            const worker = data as any;
+
+            if (error || !worker) {
+                setNotification({
+                    show: true,
+                    message: "NFC Tag not recognized. Please register this card in the Admin Portal.",
+                    severity: 'warning'
+                });
+                setTimeout(() => setNotification(null), 5000);
+                return;
+            }
+
+            const isCurrentlyIn = worker.status === 'present';
+            const action = isCurrentlyIn ? 'clock_out' : 'clock_in';
+            const newStatus = isCurrentlyIn ? 'offline' : 'present';
+
+            // Confirm clock out if they have tasks (only if it's the current user, otherwise auto-clock-out)
+            // For a "Terminal" feel, we auto-clock out.
+            if (isCurrentlyIn) {
+                await completeAllTasks(worker.id);
+            }
+
+            await updateUserStatus(worker.id, newStatus, 'available');
+            await logActivity(worker.id, action, `Worker ${action} via NFC Tap`);
+
+            // Audio feedback (optional, but requested "beep")
+            try {
+                const audioCtx = new (window as any).AudioContext();
+                const osc = audioCtx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(isCurrentlyIn ? 440 : 880, audioCtx.currentTime);
+                osc.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.1);
+            } catch (e) { /* audio failed */ }
+
+            setNotification({
+                show: true,
+                message: `${isCurrentlyIn ? 'Goodbye' : 'Welcome'}, ${worker.name}! You are now ${isCurrentlyIn ? 'Clocked Out' : 'Clocked In'}.`,
+                severity: 'success'
+            });
+            setTimeout(() => setNotification(null), 5000);
+
+            // If the tapped worker is the SAME as the logged in user, refresh local state
+            if (user && worker.id === user.id) {
+                fetchUserStatus();
+            }
+
+        } catch (err) {
+            console.error("Error processing NFC tap:", err);
+            setNotification({
+                show: true,
+                message: "System error processing NFC tap.",
+                severity: 'error'
+            });
         }
     };
 
@@ -469,6 +569,38 @@ export const WorkerPortalPage: React.FC = () => {
                     outline: none;
                 }
 
+                .nfc-heartbeat {
+                    width: 12px;
+                    height: 12px;
+                    border-radius: 50%;
+                    background: #10B981;
+                    display: inline-block;
+                    margin-right: 8px;
+                    animation: heartbeat 1.5s ease-in-out infinite;
+                }
+
+                @keyframes heartbeat {
+                    0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+                    70% { transform: scale(1.3); opacity: 0.5; box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+                    100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+                }
+
+                .nfc-status-bar {
+                    background: #F8FAFC;
+                    border: 1px solid #E2E8F0;
+                    border-radius: 12px;
+                    padding: 0.75rem 1.25rem;
+                    display: flex;
+                    align-items: center;
+                    font-size: 0.85rem;
+                    font-weight: 700;
+                    color: #64748B;
+                    margin-bottom: 2rem;
+                }
+
+                .nfc-status-error { color: #EF4444; border-color: #FEE2E2; background: #FFF7ED; }
+                .nfc-status-reading { color: #2563EB; border-color: #DBEAFE; background: #EFF6FF; }
+
                 @media (max-width: 900px) {
                     .worker-sidebar { width: 80px; padding: 2.5rem 0.75rem; }
                     .sidebar-brand span, .nav-item span { display: none; }
@@ -550,6 +682,15 @@ export const WorkerPortalPage: React.FC = () => {
                 </header>
 
                 <div className="worker-content">
+                    {nfcStatus !== 'idle' && (
+                        <div className={`nfc-status-bar ${nfcStatus === 'error' ? 'nfc-status-error' : nfcStatus === 'reading' ? 'nfc-status-reading' : ''}`}>
+                            {nfcStatus === 'listening' && <div className="nfc-heartbeat"></div>}
+                            {nfcStatus === 'listening' ? "NFC Active: Tap card to clock in/out" :
+                                nfcStatus === 'reading' ? "Reading Tag..." :
+                                    nfcStatus === 'error' ? "NFC Error: Check settings or device support" : "NFC Offline"}
+                        </div>
+                    )}
+
                     {activeTab === 'dashboard' && (
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
                             <div className="status-card">

@@ -13,7 +13,7 @@ export const WorkersPage: React.FC = () => {
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
     const [selectedWorker, setSelectedWorker] = useState<any>(null);
     const [rateHistory, setRateHistory] = useState<any[]>([]);
-    const [formData, setFormData] = useState({ worker_id: '', name: '', username: '', rate: '', password: '', active: true });
+    const [formData, setFormData] = useState({ worker_id: '', name: '', username: '', rate: '', password: '', active: true, nfc_id: '' });
 
     useEffect(() => { fetchWorkers(); }, []);
 
@@ -46,7 +46,8 @@ export const WorkersPage: React.FC = () => {
             username: '',
             rate: '',
             password: '',
-            active: true
+            active: true,
+            nfc_id: ''
         });
         setIsAddOpen(true);
     };
@@ -64,7 +65,8 @@ export const WorkersPage: React.FC = () => {
             hourly_rate: parseFloat(formData.rate),
             password: defaultPassword, // Set default password
             role: 'employee',
-            active: true
+            active: true,
+            nfc_id: formData.nfc_id
         });
 
         if (!error) {
@@ -92,7 +94,8 @@ export const WorkersPage: React.FC = () => {
             name: formData.name,
             username: formData.username,
             worker_id: formData.worker_id,
-            hourly_rate: parseFloat(formData.rate)
+            hourly_rate: parseFloat(formData.rate),
+            nfc_id: formData.nfc_id
         }).eq('id', selectedWorker.id);
 
         if (!error) {
@@ -120,7 +123,7 @@ export const WorkersPage: React.FC = () => {
     };
 
     const resetForm = () => {
-        setFormData({ worker_id: '', name: '', username: '', rate: '', password: '', active: true });
+        setFormData({ worker_id: '', name: '', username: '', rate: '', password: '', active: true, nfc_id: '' });
         setSelectedWorker(null);
     };
 
@@ -132,7 +135,8 @@ export const WorkersPage: React.FC = () => {
             username: (worker.username || '').replace('@BabylonLLC.com', ''), // Strip domain for edit if it was added in view
             rate: worker.hourly_rate?.toString() || '0',
             password: '',
-            active: worker.active !== false
+            active: worker.active !== false,
+            nfc_id: worker.nfc_id || ''
         });
         setIsEditOpen(true);
     };
@@ -291,7 +295,6 @@ export const WorkersPage: React.FC = () => {
                         <label style={{ display: 'block', fontWeight: 600, marginBottom: '0.5rem', color: '#111', fontSize: '0.95rem' }}>Hourly Rate ($)</label>
                         <input type="number" value={formData.rate} onChange={e => setFormData({ ...formData, rate: e.target.value })} placeholder="0.00" style={{ width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1.5px solid #DDD' }} />
                     </div>
-
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
                         <button className="btn" onClick={() => setIsAddOpen(false)} style={{ width: 'auto', padding: '0.75rem 1.75rem', borderRadius: '8px', border: '1.5px solid #DDD', background: 'white' }}>Cancel</button>
                         <button className="btn" onClick={handleHire} style={{ width: 'auto', padding: '0.75rem 1.75rem', borderRadius: '8px', border: 'none', background: '#111', color: 'white' }}>Create</button>
